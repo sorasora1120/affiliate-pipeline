@@ -131,10 +131,41 @@ class A8Scraper:
     # スクレイピング
     # ------------------------------------------------------------------
 
+    def _find_selfback_url(self, page: Page) -> str:
+        """media-console のナビゲーションからセルフバックURLを探す。見つからなければ既知URLを返す。"""
+        logger.info("media-console でセルフバックリンクを探索中... 現在URL: %s", page.url)
+        page.wait_for_load_state("networkidle", timeout=15_000)
+        page.screenshot(path="debug_dashboard.png")
+
+        # ページ内の全リンクを列挙してセルフバック関連を探す
+        links = page.locator("a").all()
+        logger.info("ページ内リンク数: %d", len(links))
+        for link in links:
+            try:
+                href = link.get_attribute("href") or ""
+                text = link.inner_text().strip()
+                if "selfback" in href.lower() or "セルフバック" in text:
+                    logger.info("セルフバックリンク発見: text=%s href=%s", text, href)
+                    if href.startswith("http"):
+                        return href
+                    if href.startswith("/"):
+                        base = page.url.split("/")[0] + "//" + page.url.split("/")[2]
+                        return base + href
+            except Exception:
+                pass
+
+        # 見つからなければ pub.a8.net の直接 URL にフォールバック
+        logger.warning("セルフバックリンクが見つからなかったため既知URLを使用: %s", SELFBACK_URL)
+        return SELFBACK_URL
+
     def _scrape_all_pages(self, page: Page, min_reward: int) -> list[Campaign]:
         results: list[Campaign] = []
-        logger.info("セルフバックページへ移動: %s", SELFBACK_URL)
-        page.goto(SELFBACK_URL, wait_until="networkidle", timeout=30_000)
+
+        # media-console でセルフバックリンクを探してクリック
+        selfback_url = self._find_selfback_url(page)
+        logger.info("セルフバックページへ移動: %s", selfback_url)
+        page.goto(selfback_url, wait_until="networkidle", timeout=30_000)
+        page.wait_for_timeout(2000)
 
         # デバッグ: スクリーンショット＋HTML先頭3000字を出力
         page.screenshot(path="debug_selfback.png")
