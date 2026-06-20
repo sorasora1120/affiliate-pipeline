@@ -1,0 +1,60 @@
+name: 自動収益化パイプライン（毎日実行）
+
+on:
+  schedule:
+    # 毎日 JST 9:00 に実行（UTC 0:00）
+    - cron: "0 0 * * *"
+  workflow_dispatch:   # 手動実行も可能
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: パイプラインを実行
+        env:
+          # A8.net 認証
+          A8_USERNAME: ${{ secrets.A8_USERNAME }}
+          A8_PASSWORD: ${{ secrets.A8_PASSWORD }}
+
+          # Claude API
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # WordPress
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WP_POST_STATUS: ${{ vars.WP_POST_STATUS || 'draft' }}
+          WP_CATEGORY_ID: ${{ vars.WP_CATEGORY_ID || '1' }}
+
+          # Discord
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+          # 動作パラメータ（必要に応じて GitHub Variables で上書き可）
+          MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '5000' }}
+          MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '3' }}
+          ARTICLE_INTERVAL_SECONDS: ${{ vars.ARTICLE_INTERVAL_SECONDS || '30' }}
+
+        run: python main.py
+
+      - name: 失敗時に Discord へ通知（ジョブレベルの保険）
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \":red_circle: **[GitHub Actions]** パイプラインが失敗しました。\\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
