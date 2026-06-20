@@ -96,14 +96,15 @@ class A8Scraper:
         pass_field.fill(self.password)
         logger.info("パスワード入力完了")
 
+        # フォームを JavaScript で直接送信（ボタンが非表示の場合も対応）
         with page.expect_navigation(wait_until="networkidle", timeout=20_000):
-            btn.click()
+            page.evaluate("document.querySelector('form').submit()")
 
         page.screenshot(path="debug_login_after.png")
         logger.info("ログイン後URL: %s", page.url)
 
         # ログインページに戻っていたら失敗
-        if "login" in page.url.lower() or "Login" in page.url:
+        if "Login" in page.url or "indexLogin" in page.url:
             raise RuntimeError(
                 "セルフバックログイン失敗。A8_USERNAME（ログインID）と A8_PASSWORD を確認してください。\n"
                 "メールアドレスではなく英数字のログインIDを使ってください。"
