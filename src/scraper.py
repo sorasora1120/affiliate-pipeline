@@ -81,7 +81,9 @@ class A8Scraper:
 
     def _login(self, page: Page) -> None:
         logger.info("A8.net にログイン中... %s", LOGIN_URL)
-        page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+        page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+        # JS レンダリングを待つ
+        page.wait_for_timeout(5000)
 
         # デバッグ: ページ内の全 input 要素を列挙
         inputs = page.locator("input").all()
