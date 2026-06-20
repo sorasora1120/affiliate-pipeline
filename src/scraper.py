@@ -136,6 +136,11 @@ class A8Scraper:
         logger.info("セルフバックページへ移動: %s", SELFBACK_URL)
         page.goto(SELFBACK_URL, wait_until="networkidle", timeout=30_000)
 
+        # デバッグ: スクリーンショット＋HTML先頭3000字を出力
+        page.screenshot(path="debug_selfback.png")
+        html_preview = page.content()[:3000]
+        logger.info("セルフバックページHTML（先頭3000字）:\n%s", html_preview)
+
         page_num = 1
         while True:
             logger.info("ページ %d をスクレイピング中...", page_num)
@@ -143,7 +148,7 @@ class A8Scraper:
             time.sleep(1)
 
             items = page.locator(SEL_ITEM).all()
-            logger.debug("案件要素数: %d", len(items))
+            logger.info("案件要素数（SEL_ITEM）: %d", len(items))
 
             for item in items:
                 campaign = self._extract_campaign(item, page.url)
