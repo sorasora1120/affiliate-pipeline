@@ -100,16 +100,24 @@ class A8Scraper:
         with page.expect_navigation(wait_until="networkidle", timeout=20_000):
             page.evaluate("document.querySelector('form').submit()")
 
+        page.wait_for_timeout(2000)
         page.screenshot(path="debug_login_after.png")
         logger.info("ログイン後URL: %s", page.url)
 
-        # ログインページに戻っていたら失敗
-        if "Login" in page.url or "indexLogin" in page.url:
-            raise RuntimeError(
-                "セルフバックログイン失敗。A8_USERNAME（ログインID）と A8_PASSWORD を確認してください。\n"
-                "メールアドレスではなく英数字のログインIDを使ってください。"
-            )
-        logger.info("ログイン成功: %s", page.url)
+        # ページ内のエラーメッセージを記録
+        body_text = page.locator("body").inner_text()[:500]
+        logger.info("ページ内容（先頭500字）: %s", body_text)
+
+        # セルフバック一覧ページに到達できていれば成功
+        if "selfback" in page.url.lower() and "indexLogin" not in page.url and "asLoginAction" not in page.url:
+            logger.info("ログイン成功: %s", page.url)
+            return
+
+        raise RuntimeError(
+            f"セルフバックログイン失敗。遷移先: {page.url}\n"
+            "A8_USERNAME（英数字のログインID）と A8_PASSWORD を再確認してください。\n"
+            "debug_login_after.png を Artifacts で確認してください。"
+        )
 
     # ------------------------------------------------------------------
     # スクレイピング
