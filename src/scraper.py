@@ -101,45 +101,28 @@ class A8Scraper:
             except Exception:
                 pass
 
-        # スクリーンショットを保存（GitHub Actions アーティファクトで確認可能）
         page.screenshot(path="debug_login.png")
         logger.info("スクリーンショット保存: debug_login.png")
 
-        # --- 柔軟なフィールド検索 ---
-        # テキスト系 input（type=text / email / tel / 未指定）を順に試す
-        text_inputs = page.locator(
-            "input:not([type='password']):not([type='hidden']):not([type='submit']):not([type='checkbox'])"
-        ).all()
-        pass_inputs = page.locator("input[type='password']").all()
-
-        if not text_inputs:
-            raise RuntimeError(
-                "A8.net ログインページにテキスト入力フィールドが見つかりません。\n"
-                "debug_login.png を GitHub Actions アーティファクトで確認してください。"
-            )
-
-        text_inputs[0].fill(self.username)
+        # フィールド名が判明しているので直接指定（メディア会員フォーム）
+        page.fill("input[name='login']", self.username)
         logger.info("ユーザー名を入力しました")
+        page.fill("input[name='passwd']", self.password)
+        logger.info("パスワードを入力しました")
 
-        if pass_inputs:
-            pass_inputs[0].fill(self.password)
-            logger.info("パスワードを入力しました")
+        # 送信 → ページ遷移を待つ
+        with page.expect_navigation(wait_until="networkidle", timeout=20_000):
+            page.click("input[name='login_as_btn']")
 
-        # 送信ボタンを押す
-        submit = page.locator("button[type='submit'], input[type='submit']").first
-        submit.click()
+        page.screenshot(path="debug_login_after.png")
+        logger.info("遷移後URL: %s", page.url)
 
-        # ログイン完了を待機
-        try:
-            page.wait_for_url(
-                lambda url: "login" not in url,
-                timeout=15_000,
-            )
-        except PlaywrightTimeout:
-            page.screenshot(path="debug_login_after.png")
+        # エラーメッセージが表示されている場合はログイン失敗
+        error_el = page.locator(".error, .err, [class*='error'], [class*='alert']").first
+        if error_el.is_visible():
             raise RuntimeError(
-                "A8.net ログイン後にページ遷移が確認できませんでした。\n"
-                "debug_login_after.png を確認してください。"
+                f"A8.net ログイン失敗: {error_el.inner_text()}\n"
+                "A8_USERNAME / A8_PASSWORD を確認してください。"
             )
 
         logger.info("ログイン成功: %s", page.url)
