@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # URL・セレクタ定数
 # ---------------------------------------------------------------------------
-LOGIN_URL    = "https://media-console.a8.net/login"
-SELFBACK_URL = "https://media-console.a8.net/selfback"
+LOGIN_URL    = "https://www.a8.net"
+SELFBACK_URL = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
 
 # ログインフォーム
 SEL_LOGIN_ID   = "input[name='loginId'], input[type='email'], #loginId, #email"
