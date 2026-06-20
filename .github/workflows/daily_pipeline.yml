@@ -33,12 +33,11 @@ jobs:
           # Claude API
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-          # WordPress
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
-          WP_USERNAME: ${{ secrets.WP_USERNAME }}
-          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          WP_POST_STATUS: ${{ vars.WP_POST_STATUS || 'draft' }}
-          WP_CATEGORY_ID: ${{ vars.WP_CATEGORY_ID || '1' }}
+          # はてなブログ
+          HATENA_ID: ${{ secrets.HATENA_ID }}
+          HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
+          HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
+          HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'yes' }}
 
           # Discord
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
