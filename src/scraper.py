@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # URL・セレクタ定数
 # ---------------------------------------------------------------------------
-LOGIN_URL    = "https://www.a8.net"
+LOGIN_URL    = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"  # セルフバック直接ログイン
 SELFBACK_URL = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
 
 # ログインフォーム
@@ -80,51 +80,34 @@ class A8Scraper:
     # ------------------------------------------------------------------
 
     def _login(self, page: Page) -> None:
-        logger.info("A8.net にログイン中... %s", LOGIN_URL)
-        page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
-        # JS レンダリングを待つ
-        page.wait_for_timeout(5000)
-
-        # デバッグ: ページ内の全 input 要素を列挙
-        inputs = page.locator("input").all()
-        logger.info("ページ上の input 要素数: %d", len(inputs))
-        for i, inp in enumerate(inputs):
-            try:
-                logger.info(
-                    "  input[%d]: type=%s name=%s id=%s placeholder=%s",
-                    i,
-                    inp.get_attribute("type"),
-                    inp.get_attribute("name"),
-                    inp.get_attribute("id"),
-                    inp.get_attribute("placeholder"),
-                )
-            except Exception:
-                pass
-
+        logger.info("セルフバックページへ移動してログイン: %s", LOGIN_URL)
+        page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
         page.screenshot(path="debug_login.png")
-        logger.info("スクリーンショット保存: debug_login.png")
+        logger.info("現在URL: %s", page.url)
 
-        # フィールド名が判明しているので直接指定（メディア会員フォーム）
-        page.fill("input[name='login']", self.username)
-        logger.info("ユーザー名を入力しました")
-        page.fill("input[name='passwd']", self.password)
-        logger.info("パスワードを入力しました")
+        # セルフバックのログインフォームに直接入力
+        # pub.a8.net のセルフバックログイン画面: ログインID / パスワード
+        id_field   = page.locator("input[name='login_id'], input[name='loginId'], input[type='text']").first
+        pass_field = page.locator("input[name='password'], input[name='passwd'], input[type='password']").first
+        btn        = page.locator("input[type='submit'], button[type='submit']").first
 
-        # 送信 → ページ遷移を待つ
+        id_field.fill(self.username)
+        logger.info("ログインID入力完了")
+        pass_field.fill(self.password)
+        logger.info("パスワード入力完了")
+
         with page.expect_navigation(wait_until="networkidle", timeout=20_000):
-            page.click("input[name='login_as_btn']")
+            btn.click()
 
         page.screenshot(path="debug_login_after.png")
-        logger.info("遷移後URL: %s", page.url)
+        logger.info("ログイン後URL: %s", page.url)
 
-        # エラーメッセージが表示されている場合はログイン失敗
-        error_el = page.locator(".error, .err, [class*='error'], [class*='alert']").first
-        if error_el.is_visible():
+        # ログインページに戻っていたら失敗
+        if "login" in page.url.lower() or "Login" in page.url:
             raise RuntimeError(
-                f"A8.net ログイン失敗: {error_el.inner_text()}\n"
-                "A8_USERNAME / A8_PASSWORD を確認してください。"
+                "セルフバックログイン失敗。A8_USERNAME（ログインID）と A8_PASSWORD を確認してください。\n"
+                "メールアドレスではなく英数字のログインIDを使ってください。"
             )
-
         logger.info("ログイン成功: %s", page.url)
 
     # ------------------------------------------------------------------
