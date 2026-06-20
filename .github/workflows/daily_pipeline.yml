@@ -52,6 +52,14 @@ jobs:
 
         run: python main.py
 
+      - name: デバッグ用スクリーンショットを保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: debug_*.png
+          if-no-files-found: ignore
+
       - name: 失敗時に Discord へ通知（ジョブレベルの保険）
         if: failure()
         env:

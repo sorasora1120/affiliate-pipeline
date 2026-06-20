@@ -83,26 +83,62 @@ class A8Scraper:
         logger.info("A8.net にログイン中... %s", LOGIN_URL)
         page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
 
-        # ID入力
-        page.wait_for_selector(SEL_LOGIN_ID, timeout=10_000)
-        page.fill(SEL_LOGIN_ID, self.username)
-        page.fill(SEL_LOGIN_PASS, self.password)
-        page.click(SEL_LOGIN_BTN)
+        # デバッグ: ページ内の全 input 要素を列挙
+        inputs = page.locator("input").all()
+        logger.info("ページ上の input 要素数: %d", len(inputs))
+        for i, inp in enumerate(inputs):
+            try:
+                logger.info(
+                    "  input[%d]: type=%s name=%s id=%s placeholder=%s",
+                    i,
+                    inp.get_attribute("type"),
+                    inp.get_attribute("name"),
+                    inp.get_attribute("id"),
+                    inp.get_attribute("placeholder"),
+                )
+            except Exception:
+                pass
 
-        # ログイン完了を待機（URL変化 or ダッシュボード要素）
+        # スクリーンショットを保存（GitHub Actions アーティファクトで確認可能）
+        page.screenshot(path="debug_login.png")
+        logger.info("スクリーンショット保存: debug_login.png")
+
+        # --- 柔軟なフィールド検索 ---
+        # テキスト系 input（type=text / email / tel / 未指定）を順に試す
+        text_inputs = page.locator(
+            "input:not([type='password']):not([type='hidden']):not([type='submit']):not([type='checkbox'])"
+        ).all()
+        pass_inputs = page.locator("input[type='password']").all()
+
+        if not text_inputs:
+            raise RuntimeError(
+                "A8.net ログインページにテキスト入力フィールドが見つかりません。\n"
+                "debug_login.png を GitHub Actions アーティファクトで確認してください。"
+            )
+
+        text_inputs[0].fill(self.username)
+        logger.info("ユーザー名を入力しました")
+
+        if pass_inputs:
+            pass_inputs[0].fill(self.password)
+            logger.info("パスワードを入力しました")
+
+        # 送信ボタンを押す
+        submit = page.locator("button[type='submit'], input[type='submit']").first
+        submit.click()
+
+        # ログイン完了を待機
         try:
             page.wait_for_url(
                 lambda url: "login" not in url,
                 timeout=15_000,
             )
         except PlaywrightTimeout:
-            # URL が変わらなくてもエラーメッセージがなければ続行
-            error_text = page.locator("[class*='error'], [class*='alert']").first
-            if error_text.is_visible():
-                raise RuntimeError(
-                    f"A8.net ログイン失敗: {error_text.inner_text()}\n"
-                    "A8_USERNAME / A8_PASSWORD を確認してください。"
-                )
+            page.screenshot(path="debug_login_after.png")
+            raise RuntimeError(
+                "A8.net ログイン後にページ遷移が確認できませんでした。\n"
+                "debug_login_after.png を確認してください。"
+            )
 
         logger.info("ログイン成功: %s", page.url)
 
