@@ -24,6 +24,9 @@ jobs:
       - name: 依存パッケージをインストール
         run: pip install -r requirements.txt
 
+      - name: Playwright ブラウザをインストール
+        run: playwright install chromium --with-deps
+
       - name: パイプラインを実行
         env:
           # A8.net 認証

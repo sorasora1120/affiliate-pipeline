@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); cd \"c:\\\\Users\\\\優空\\\\OneDrive\\\\デスクトップ\\\\claudeの家\" && git add . && git commit -m \"Switch to Playwright for A8.net scraping\" && git push)"
+    ]
+  }
+}
