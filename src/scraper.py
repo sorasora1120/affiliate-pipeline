@@ -80,28 +80,29 @@ class A8Scraper:
     # ------------------------------------------------------------------
 
     def _scrape(self, page: Page, min_reward: int) -> list[Campaign]:
+        from .notifier import notify_discord
         campaigns: list[Campaign] = []
 
-        # ログイン直後のページ（asIndexAction.do）をそのまま使う
-        logger.info("ログイン後ページでスクレイピング: %s", page.url)
-        page.wait_for_timeout(5000)  # JS描画待ち
+        notify_discord(f"[v5] スクレイプ開始 url={page.url}")
+        page.wait_for_timeout(5000)
         page.screenshot(path="debug_selfback.png")
+        notify_discord(f"[v5] 5秒後 url={page.url}")
 
-        # リンク一覧と全テキストを取得
+        try:
+            full_text = page.locator("body").inner_text()
+        except Exception as e:
+            full_text = ""
+            notify_discord(f"[v5] inner_text失敗: {e}")
+
+        notify_discord(f"[v5] テキスト({len(full_text)}字):\n{full_text[:700]}")
+
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a')).map(a => ({
                 text: a.innerText.trim(),
                 href: a.href
             })).filter(a => a.text.length > 0)
         """)
-        logger.info("ページ内リンク数: %d", len(all_links))
-
-        full_text = page.inner_text("body")
-        logger.info("ページテキスト（先頭1000字）:\n%s", full_text[:1000])
-
-        # Discord にページテキストを送信（デバッグ用）
-        from .notifier import notify_discord
-        notify_discord(f"[DEBUG] ページテキスト先頭800字:\n{full_text[:800]}")
+        notify_discord(f"[v5] リンク={len(all_links)}件 / 円含む={sum(1 for l in all_links if '円' in l.get('text',''))}")
 
         # 「円」を含むリンクを案件候補として抽出
         for link in all_links:
