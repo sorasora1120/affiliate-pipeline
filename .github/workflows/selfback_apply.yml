@@ -1,0 +1,49 @@
+name: セルフバック自動申込
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 週2回実行（月・木 JST 10:00）
+    - cron: "0 1 * * 1,4"
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: playwright install chromium --with-deps
+
+      - name: セルフバック自動申込を実行
+        env:
+          A8_USERNAME: ${{ secrets.A8_USERNAME }}
+          A8_PASSWORD: ${{ secrets.A8_PASSWORD }}
+          APPLICANT_NAME: ${{ secrets.APPLICANT_NAME }}
+          APPLICANT_NAME_KANA: ${{ secrets.APPLICANT_NAME_KANA }}
+          APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python -c "
+from src.selfback_applier import SelfbackApplier
+from src.notifier import notify_discord
+applier = SelfbackApplier()
+results = applier.run(max_apply=10)
+applied = [r for r in results if r.status == 'applied']
+notify_discord(f'=== 自動申込完了 ===\n申込成功: {len(applied)}件\n合計報酬見込: {sum(r.reward for r in applied):,}円')
+"
+
+      - name: スクリーンショット保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfback-debug
+          path: debug_*.png
+          if-no-files-found: ignore
