@@ -76,93 +76,65 @@ class A8Scraper:
         logger.info("ログイン成功: %s", page.url)
 
     # ------------------------------------------------------------------
-    # スクレイピング（JS評価方式）
+    # スクレイピング（ページテキスト解析方式）
     # ------------------------------------------------------------------
 
     def _scrape(self, page: Page, min_reward: int) -> list[Campaign]:
         campaigns: list[Campaign] = []
-        page_num = 1
 
-        while True:
-            url = SEARCH_URL.format(page=page_num)
-            logger.info("ページ %d を取得: %s", page_num, url)
-            page.goto(url, wait_until="networkidle", timeout=30_000)
-            page.wait_for_timeout(4000)  # JS描画待ち
+        # ログイン直後のページ（asIndexAction.do）をそのまま使う
+        logger.info("ログイン後ページでスクレイピング: %s", page.url)
+        page.wait_for_timeout(5000)  # JS描画待ち
+        page.screenshot(path="debug_selfback.png")
 
-            if page_num == 1:
-                page.screenshot(path="debug_selfback.png")
+        # リンク一覧と全テキストを取得
+        all_links = page.evaluate("""
+            () => Array.from(document.querySelectorAll('a')).map(a => ({
+                text: a.innerText.trim(),
+                href: a.href
+            })).filter(a => a.text.length > 0)
+        """)
+        logger.info("ページ内リンク数: %d", len(all_links))
 
-            # JavaScript でページ内の案件データを直接抽出
-            raw_items = page.evaluate("""
-                () => {
-                    const results = [];
-                    // テキストに「円」を含む要素を探す
-                    const all = document.querySelectorAll('*');
-                    const seen = new Set();
-                    all.forEach(el => {
-                        if (el.children.length > 0) return;
-                        const txt = (el.innerText || '').trim();
-                        if (!txt.match(/[0-9,]+円/) || txt.length > 200) return;
-                        // 親要素を候補として追加
-                        const parent = el.closest('li, tr, div[class], dl') || el.parentElement;
-                        if (!parent || seen.has(parent)) return;
-                        seen.add(parent);
-                        const link = parent.querySelector('a');
-                        results.push({
-                            text: parent.innerText.trim().substring(0, 300),
-                            href: link ? link.href : '',
-                            html_tag: parent.tagName + '.' + parent.className
-                        });
-                    });
-                    return results.slice(0, 50);
-                }
-            """)
+        full_text = page.inner_text("body")
+        logger.info("ページテキスト（先頭1000字）:\n%s", full_text[:1000])
 
-            logger.info("JS抽出: %d 件の候補", len(raw_items))
-
-            if not raw_items:
-                # HTML先頭を出力してデバッグ
-                logger.info("HTMLプレビュー:\n%s", page.content()[:1500])
-                break
-
-            for item in raw_items:
-                campaign = self._parse_raw(item)
-                if campaign and campaign.reward_amount >= min_reward:
-                    if not any(c.service_name == campaign.service_name for c in campaigns):
-                        campaigns.append(campaign)
-                        logger.info("案件追加: %s (%d円)", campaign.service_name, campaign.reward_amount)
-
-            # 次ページ確認（最大5ページ）
-            if page_num >= 5 or len(raw_items) < 10:
-                break
-            page_num += 1
-
-        return campaigns
-
-    def _parse_raw(self, item: dict) -> Optional[Campaign]:
-        try:
-            text = item.get("text", "")
-            href = item.get("href", "")
-
-            # 報酬額を抽出（最大の数字を採用）
+        # 「円」を含むリンクを案件候補として抽出
+        for link in all_links:
+            text = link.get("text", "")
+            href = link.get("href", "")
+            if "円" not in text:
+                continue
             amounts = [int(re.sub(r"[^\d]", "", m)) for m in re.findall(r"[\d,]+円", text)]
             if not amounts:
-                return None
+                continue
             reward_amount = max(amounts)
-
-            # サービス名（最初の行）
-            lines = [l.strip() for l in text.split("\n") if l.strip()]
-            service_name = lines[0] if lines else text[:30]
-
-            # 報酬行を除いた説明文
-            description = " ".join(l for l in lines[1:] if "円" not in l)[:200]
-
-            return Campaign(
+            if reward_amount < min_reward:
+                continue
+            service_name = re.sub(r"[\d,]+円.*", "", text).strip()[:50] or text[:50]
+            if not service_name or any(c.service_name == service_name for c in campaigns):
+                continue
+            campaigns.append(Campaign(
                 service_name=service_name,
                 reward_amount=reward_amount,
-                description=description,
-                url=href or "https://pub.a8.net/a8v2/selfback/asSearchAction.do",
-            )
-        except Exception as exc:
-            logger.debug("パース失敗: %s", exc)
-            return None
+                description=text[:200],
+                url=href,
+            ))
+            logger.info("案件: %s (%d円)", service_name, reward_amount)
+
+        # リンクで見つからない場合はテキスト全体から正規表現で抽出
+        if not campaigns:
+            logger.info("リンク抽出0件のためテキスト解析を試みます")
+            for match in re.finditer(r"(.{5,40}?)[\s　]+([\d,]+)円", full_text):
+                name = match.group(1).strip()
+                amount = int(re.sub(r"[^\d]", "", match.group(2)))
+                if amount >= min_reward and name and not any(c.service_name == name for c in campaigns):
+                    campaigns.append(Campaign(
+                        service_name=name,
+                        reward_amount=amount,
+                        description="",
+                        url=page.url,
+                    ))
+                    logger.info("テキスト解析案件: %s (%d円)", name, amount)
+
+        return campaigns
