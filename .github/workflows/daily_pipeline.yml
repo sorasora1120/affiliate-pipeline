@@ -2,8 +2,8 @@ name: 自動収益化パイプライン（毎日実行）
 
 on:
   schedule:
-    # デバッグ中: 30分毎に実行（安定したら毎日JST9時に戻す）
-    - cron: "*/30 * * * *"
+    # 毎日 JST 9:00 に実行（UTC 0:00）
+    - cron: "0 0 * * *"
   workflow_dispatch:   # 手動実行も可能
 
 jobs:
@@ -40,13 +40,13 @@ jobs:
           HATENA_ID: ${{ secrets.HATENA_ID }}
           HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
           HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
-          HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'yes' }}
+          HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'no' }}
 
           # Discord
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
           # 動作パラメータ（必要に応じて GitHub Variables で上書き可）
-          MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '0' }}
+          MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '5000' }}
           MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '3' }}
           ARTICLE_INTERVAL_SECONDS: ${{ vars.ARTICLE_INTERVAL_SECONDS || '30' }}
 
