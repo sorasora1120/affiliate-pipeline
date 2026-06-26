@@ -80,6 +80,11 @@ class A8Scraper:
 
         return body_text
 
+    # ページUI要素として除外するキーワード
+    _NOISE = {"報酬UP", "報酬アップ", "オーダー数", "報酬額", "詳細を見る", "→", "マイページ",
+              "ランキング", "特集", "カテゴリー", "お気に入り", "新着", "すべて見る",
+              "締切", "期間限定", "人気ワード", "条件を指定", "本日のおすすめ"}
+
     def _parse_campaigns(self, text: str, base_url: str, min_reward: int) -> list[Campaign]:
         """ページテキストから案件を抽出"""
         campaigns: list[Campaign] = []
@@ -88,25 +93,40 @@ class A8Scraper:
         i = 0
         while i < len(lines):
             line = lines[i]
-            # 金額パターンを探す
             m = re.search(r"([\d,]+)円", line)
             if m:
                 amount = int(m.group(1).replace(",", ""))
-                # サービス名は直前の行
-                name = lines[i - 1] if i > 0 else line
-                name = re.sub(r"[\d,]+円.*", "", name).strip()
-                if not name:
-                    name = line[:40]
+                # 直前の行をサービス名候補に
+                name = lines[i - 1] if i > 0 else ""
+                # 行自体に金額以外のテキストがあればそちらも候補
+                line_name = re.sub(r"[\d,]+円.*", "", line).strip()
+                if len(line_name) > 2:
+                    name = line_name
 
-                if amount >= min_reward and len(name) > 1:
-                    if not any(c.service_name == name for c in campaigns):
-                        campaigns.append(Campaign(
-                            service_name=name,
-                            reward_amount=amount,
-                            description=line,
-                            url=base_url,
-                        ))
-                        logger.info("案件: %s (%d円)", name, amount)
+                name = name.strip()
+
+                # ノイズ除外
+                is_noise = (
+                    not name
+                    or len(name) < 2
+                    or any(n in name for n in self._NOISE)
+                    or name.startswith("→")
+                    or re.match(r"^[\d,]+$", name)
+                    or "件" in name
+                    or name in ("0円", "円")
+                )
+                if is_noise:
+                    i += 1
+                    continue
+
+                if amount >= min_reward and not any(c.service_name == name for c in campaigns):
+                    campaigns.append(Campaign(
+                        service_name=name,
+                        reward_amount=amount,
+                        description=line,
+                        url=base_url,
+                    ))
+                    logger.info("案件: %s (%d円)", name, amount)
             i += 1
 
         return campaigns
