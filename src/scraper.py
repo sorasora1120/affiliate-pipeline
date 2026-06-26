@@ -99,6 +99,10 @@ class A8Scraper:
         full_text = page.inner_text("body")
         logger.info("ページテキスト（先頭1000字）:\n%s", full_text[:1000])
 
+        # Discord にページテキストを送信（デバッグ用）
+        from .notifier import notify_discord
+        notify_discord(f"[DEBUG] ページテキスト先頭800字:\n{full_text[:800]}")
+
         # 「円」を含むリンクを案件候補として抽出
         for link in all_links:
             text = link.get("text", "")
@@ -125,7 +129,7 @@ class A8Scraper:
         # リンクで見つからない場合はテキスト全体から正規表現で抽出
         if not campaigns:
             logger.info("リンク抽出0件のためテキスト解析を試みます")
-            for match in re.finditer(r"(.{5,40}?)[\s　]+([\d,]+)円", full_text):
+            for match in re.finditer(r"([^\d\n]{4,40}?)([\d,]{4,}円)", full_text):
                 name = match.group(1).strip()
                 amount = int(re.sub(r"[^\d]", "", match.group(2)))
                 if amount >= min_reward and name and not any(c.service_name == name for c in campaigns):
