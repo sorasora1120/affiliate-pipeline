@@ -164,6 +164,18 @@ class A8Scraper:
         html_preview = page.content()[:3000]
         logger.info("セルフバックページHTML（先頭3000字）:\n%s", html_preview)
 
+        # デバッグ: 各セレクタで何件ヒットするか確認
+        debug_selectors = [
+            "li", "li.item", "ul.itemList li", "div.item", "div.tile",
+            "div.program", "table tr", ".ad-item", "[class*='item']",
+            "[class*='tile']", "[class*='program']", "[class*='ad']",
+            "ul li", ".list li", "#itemList li",
+        ]
+        for sel in debug_selectors:
+            count = page.locator(sel).count()
+            if count > 0:
+                logger.info("セレクタ '%s': %d 件ヒット", sel, count)
+
         page_num = 1
         while True:
             logger.info("ページ %d をスクレイピング中...", page_num)
