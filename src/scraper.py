@@ -1,41 +1,19 @@
 """
-A8.net セルフバック案件スクレイパー（Playwright版）
-
-A8.net は JavaScript で動作する SPA のため、
-requests ではなく Playwright でブラウザを操作してスクレイピングします。
-
-セレクタが変わった場合は SELECTOR_* 定数を修正してください。
+A8.net セルフバック案件スクレイパー（Playwright + JS抽出版）
 """
 
 import logging
 import os
 import re
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright, Page
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# URL・セレクタ定数
-# ---------------------------------------------------------------------------
-LOGIN_URL    = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"  # セルフバック直接ログイン
-SELFBACK_URL = "https://pub.a8.net/a8v2/selfback/asSearchAction.do?sortKey=reward&sortType=desc&pageNo=1"
-
-# ログインフォーム
-SEL_LOGIN_ID   = "input[name='loginId'], input[type='email'], #loginId, #email"
-SEL_LOGIN_PASS = "input[name='password'], input[type='password'], #password"
-SEL_LOGIN_BTN  = "button[type='submit'], input[type='submit']"
-
-# セルフバック一覧
-SEL_ITEM        = ".selfback-item, .program-item, [class*='selfback'] li, article"
-SEL_NAME        = "h2, h3, .program-name, .title, [class*='name']"
-SEL_REWARD      = "[class*='reward'], [class*='price'], [class*='fee'], [class*='point']"
-SEL_DESCRIPTION = "p, .description, .detail, [class*='desc']"
-SEL_LINK        = "a"
-SEL_NEXT_PAGE   = "a[aria-label='次へ'], a.next, [class*='next'] a, button[aria-label='次のページ']"
+LOGIN_URL    = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
+SEARCH_URL   = "https://pub.a8.net/a8v2/selfback/asSearchAction.do?sortKey=reward&sortType=desc&pageNo={page}"
 
 
 @dataclass
@@ -54,25 +32,22 @@ class A8Scraper:
         self.password = os.environ["A8_PASSWORD"]
 
     def fetch_campaigns(self, min_reward: int = 5000) -> list[Campaign]:
+        from .notifier import notify_discord
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (X11; Linux x86_64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
+            page = browser.new_context(
+                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
                 locale="ja-JP",
-            )
-            page = context.new_page()
-
+            ).new_page()
             try:
                 self._login(page)
-                campaigns = self._scrape_all_pages(page, min_reward)
+                campaigns = self._scrape(page, min_reward)
             finally:
                 browser.close()
 
-        logger.info("取得案件数: %d 件（報酬 %d 円以上）", len(campaigns), min_reward)
+        logger.info("取得案件数: %d 件（%d 円以上）", len(campaigns), min_reward)
+        summary = "\n".join(f"・{c.service_name}（{c.reward_amount:,}円）" for c in campaigns[:10])
+        notify_discord(f"案件取得完了: {len(campaigns)}件\n{summary}")
         return campaigns
 
     # ------------------------------------------------------------------
@@ -80,160 +55,114 @@ class A8Scraper:
     # ------------------------------------------------------------------
 
     def _login(self, page: Page) -> None:
-        logger.info("セルフバックページへ移動してログイン: %s", LOGIN_URL)
+        logger.info("セルフバックにログイン中...")
         page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-        page.screenshot(path="debug_login.png")
-        logger.info("現在URL: %s", page.url)
 
-        # セルフバックのログインフォームに直接入力
-        # pub.a8.net のセルフバックログイン画面: ログインID / パスワード
-        id_field   = page.locator("input[name='login_id'], input[name='loginId'], input[type='text']").first
-        pass_field = page.locator("input[name='password'], input[name='passwd'], input[type='password']").first
-        btn        = page.locator("input[type='submit'], button[type='submit']").first
+        # ログインフォーム入力
+        page.locator("input[type='text']").first.fill(self.username)
+        page.locator("input[type='password']").first.fill(self.password)
 
-        id_field.fill(self.username)
-        logger.info("ログインID入力完了")
-        pass_field.fill(self.password)
-        logger.info("パスワード入力完了")
-
-        # フォームを JavaScript で直接送信（ボタンが非表示の場合も対応）
         with page.expect_navigation(wait_until="networkidle", timeout=20_000):
             page.evaluate("document.querySelector('form').submit()")
 
         page.wait_for_timeout(2000)
         page.screenshot(path="debug_login_after.png")
-        logger.info("ログイン後URL: %s", page.url)
 
-        # ページ内のエラーメッセージを記録
-        body_text = page.locator("body").inner_text()[:500]
-        logger.info("ページ内容（先頭500字）: %s", body_text)
-
-        # セルフバック一覧ページに到達できていれば成功
-        if "selfback" in page.url.lower() and "indexLogin" not in page.url and "asLoginAction" not in page.url:
-            logger.info("ログイン成功: %s", page.url)
-            return
-
-        raise RuntimeError(
-            f"セルフバックログイン失敗。遷移先: {page.url}\n"
-            "A8_USERNAME（英数字のログインID）と A8_PASSWORD を再確認してください。\n"
-            "debug_login_after.png を Artifacts で確認してください。"
-        )
+        if "indexLogin" in page.url or "asLoginAction" in page.url:
+            raise RuntimeError(
+                f"ログイン失敗（URL: {page.url}）\n"
+                "A8_USERNAME と A8_PASSWORD を確認してください。"
+            )
+        logger.info("ログイン成功: %s", page.url)
 
     # ------------------------------------------------------------------
-    # スクレイピング
+    # スクレイピング（JS評価方式）
     # ------------------------------------------------------------------
 
-    def _find_selfback_url(self, page: Page) -> str:
-        """media-console のナビゲーションからセルフバックURLを探す。見つからなければ既知URLを返す。"""
-        logger.info("media-console でセルフバックリンクを探索中... 現在URL: %s", page.url)
-        page.wait_for_load_state("networkidle", timeout=15_000)
-        page.screenshot(path="debug_dashboard.png")
-
-        # ページ内の全リンクを列挙してセルフバック関連を探す
-        links = page.locator("a").all()
-        logger.info("ページ内リンク数: %d", len(links))
-        for link in links:
-            try:
-                href = link.get_attribute("href") or ""
-                text = link.inner_text().strip()
-                if "selfback" in href.lower() or "セルフバック" in text:
-                    logger.info("セルフバックリンク発見: text=%s href=%s", text, href)
-                    if href.startswith("http"):
-                        return href
-                    if href.startswith("/"):
-                        base = page.url.split("/")[0] + "//" + page.url.split("/")[2]
-                        return base + href
-            except Exception:
-                pass
-
-        # 見つからなければ pub.a8.net の直接 URL にフォールバック
-        logger.warning("セルフバックリンクが見つからなかったため既知URLを使用: %s", SELFBACK_URL)
-        return SELFBACK_URL
-
-    def _scrape_all_pages(self, page: Page, min_reward: int) -> list[Campaign]:
-        results: list[Campaign] = []
-
-        # media-console でセルフバックリンクを探してクリック
-        selfback_url = self._find_selfback_url(page)
-        logger.info("セルフバックページへ移動: %s", selfback_url)
-        page.goto(selfback_url, wait_until="networkidle", timeout=30_000)
-        page.wait_for_timeout(2000)
-
-        # JS描画を待つ（検索結果ページ）
-        page.wait_for_timeout(5000)
-        page.screenshot(path="debug_selfback.png")
-
-        # デバッグ: 各セレクタで何件ヒットするか確認
-        debug_selectors = [
-            "li", "tr", "div.item", "ul li", "table tr",
-            "[class*='item']", "[class*='list']", "[class*='result']",
-            "[class*='program']", "[class*='ad']", "dl", "dt", "dd",
-        ]
-        for sel in debug_selectors:
-            count = page.locator(sel).count()
-            if count > 0:
-                logger.info("セレクタ '%s': %d 件ヒット", sel, count)
-
-        # HTML先頭も出力
-        html_preview = page.content()[:2000]
-        logger.info("HTMLプレビュー:\n%s", html_preview)
-
+    def _scrape(self, page: Page, min_reward: int) -> list[Campaign]:
+        campaigns: list[Campaign] = []
         page_num = 1
+
         while True:
-            logger.info("ページ %d をスクレイピング中...", page_num)
-            page.wait_for_load_state("networkidle")
-            time.sleep(1)
+            url = SEARCH_URL.format(page=page_num)
+            logger.info("ページ %d を取得: %s", page_num, url)
+            page.goto(url, wait_until="networkidle", timeout=30_000)
+            page.wait_for_timeout(4000)  # JS描画待ち
 
-            items = page.locator(SEL_ITEM).all()
-            logger.info("案件要素数（SEL_ITEM）: %d", len(items))
+            if page_num == 1:
+                page.screenshot(path="debug_selfback.png")
 
-            for item in items:
-                campaign = self._extract_campaign(item, page.url)
-                if campaign and campaign.reward_amount >= min_reward:
-                    results.append(campaign)
+            # JavaScript でページ内の案件データを直接抽出
+            raw_items = page.evaluate("""
+                () => {
+                    const results = [];
+                    // テキストに「円」を含む要素を探す
+                    const all = document.querySelectorAll('*');
+                    const seen = new Set();
+                    all.forEach(el => {
+                        if (el.children.length > 0) return;
+                        const txt = (el.innerText || '').trim();
+                        if (!txt.match(/[0-9,]+円/) || txt.length > 200) return;
+                        // 親要素を候補として追加
+                        const parent = el.closest('li, tr, div[class], dl') || el.parentElement;
+                        if (!parent || seen.has(parent)) return;
+                        seen.add(parent);
+                        const link = parent.querySelector('a');
+                        results.push({
+                            text: parent.innerText.trim().substring(0, 300),
+                            href: link ? link.href : '',
+                            html_tag: parent.tagName + '.' + parent.className
+                        });
+                    });
+                    return results.slice(0, 50);
+                }
+            """)
 
-            # 次ページへ
-            next_btn = page.locator(SEL_NEXT_PAGE).first
-            if not next_btn.is_visible():
+            logger.info("JS抽出: %d 件の候補", len(raw_items))
+
+            if not raw_items:
+                # HTML先頭を出力してデバッグ
+                logger.info("HTMLプレビュー:\n%s", page.content()[:1500])
                 break
 
-            next_btn.click()
-            page.wait_for_load_state("networkidle")
+            for item in raw_items:
+                campaign = self._parse_raw(item)
+                if campaign and campaign.reward_amount >= min_reward:
+                    if not any(c.service_name == campaign.service_name for c in campaigns):
+                        campaigns.append(campaign)
+                        logger.info("案件追加: %s (%d円)", campaign.service_name, campaign.reward_amount)
+
+            # 次ページ確認（最大5ページ）
+            if page_num >= 5 or len(raw_items) < 10:
+                break
             page_num += 1
-            time.sleep(2)
 
-        return results
+        return campaigns
 
-    def _extract_campaign(self, item, base_url: str) -> Optional[Campaign]:
+    def _parse_raw(self, item: dict) -> Optional[Campaign]:
         try:
-            name_el   = item.locator(SEL_NAME).first
-            reward_el = item.locator(SEL_REWARD).first
-            desc_el   = item.locator(SEL_DESCRIPTION).first
-            link_el   = item.locator(SEL_LINK).first
+            text = item.get("text", "")
+            href = item.get("href", "")
 
-            service_name  = name_el.inner_text().strip() if name_el.is_visible() else ""
-            reward_text   = reward_el.inner_text() if reward_el.is_visible() else "0"
-            description   = desc_el.inner_text().strip() if desc_el.is_visible() else ""
-            href          = link_el.get_attribute("href") if link_el.is_visible() else ""
-
-            if not service_name:
+            # 報酬額を抽出（最大の数字を採用）
+            amounts = [int(re.sub(r"[^\d]", "", m)) for m in re.findall(r"[\d,]+円", text)]
+            if not amounts:
                 return None
+            reward_amount = max(amounts)
 
-            reward_amount = self._parse_yen(reward_text)
-            if href and not href.startswith("http"):
-                href = "https://media-console.a8.net" + href
+            # サービス名（最初の行）
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            service_name = lines[0] if lines else text[:30]
+
+            # 報酬行を除いた説明文
+            description = " ".join(l for l in lines[1:] if "円" not in l)[:200]
 
             return Campaign(
                 service_name=service_name,
                 reward_amount=reward_amount,
                 description=description,
-                url=href or base_url,
+                url=href or "https://pub.a8.net/a8v2/selfback/asSearchAction.do",
             )
         except Exception as exc:
-            logger.debug("案件パース失敗（スキップ）: %s", exc)
+            logger.debug("パース失敗: %s", exc)
             return None
-
-    @staticmethod
-    def _parse_yen(text: str) -> int:
-        digits = re.sub(r"[^\d]", "", text)
-        return int(digits) if digits else 0
