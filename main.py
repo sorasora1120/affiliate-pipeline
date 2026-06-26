@@ -4,8 +4,9 @@
 実行フロー:
   1. A8.net からセルフバック案件を取得
   2. 各案件について Claude で記事を生成
-  3. WordPress に投稿
-  4. エラーは Discord に通知
+  3. はてなブログに投稿
+  4. Bluesky に投稿してトラフィックを獲得
+  5. エラーは Discord に通知
 """
 
 import logging
@@ -14,6 +15,7 @@ import sys
 import time
 
 from src.article_writer import ArticleWriter
+from src.bluesky_poster import BlueskyPoster
 from src.notifier import notify_discord, notify_error
 from src.scraper import A8Scraper
 from src.wordpress_poster import WordPressPoster
@@ -32,7 +34,7 @@ logger = logging.getLogger(__name__)
 # 設定
 # ---------------------------------------------------------------------------
 MIN_REWARD = int(os.environ.get("MIN_REWARD_YEN", "5000"))
-MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "3"))
+MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "5"))
 ARTICLE_INTERVAL_SECONDS = int(os.environ.get("ARTICLE_INTERVAL_SECONDS", "30"))
 
 
@@ -60,6 +62,7 @@ def run_pipeline() -> None:
 
     writer = ArticleWriter()
     poster = WordPressPoster()
+    bluesky = BlueskyPoster()
     succeeded: list[str] = []
     failed: list[str] = []
 
@@ -74,14 +77,19 @@ def run_pipeline() -> None:
             failed.append(campaign.service_name)
             continue
 
-        # 3. WordPress 投稿
+        # 3. はてなブログ投稿
         try:
             result = poster.post(article)
-            succeeded.append(f"{campaign.service_name} → {result.get('url', '')}")
+            url = result.get("url", "")
+            succeeded.append(f"{campaign.service_name} → {url}")
         except Exception as exc:
-            notify_error(exc, f"Step 3: WordPress 投稿失敗 ({campaign.service_name})")
+            notify_error(exc, f"Step 3: ブログ投稿失敗 ({campaign.service_name})")
             failed.append(campaign.service_name)
             continue
+
+        # 4. Bluesky 投稿（失敗してもパイプラインは継続）
+        if url:
+            bluesky.post(article.title, url, campaign.service_name)
 
         if i < len(targets):
             logger.info("次の案件まで %d 秒待機...", ARTICLE_INTERVAL_SECONDS)

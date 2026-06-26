@@ -41,8 +41,10 @@ jobs:
           HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'no' }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '5000' }}
-          MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '3' }}
+          MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '5' }}
           ARTICLE_INTERVAL_SECONDS: ${{ vars.ARTICLE_INTERVAL_SECONDS || '30' }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
         run: python main.py
 
       - name: デバッグ用スクリーンショットを保存
