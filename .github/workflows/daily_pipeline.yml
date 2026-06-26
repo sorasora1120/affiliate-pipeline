@@ -2,8 +2,8 @@ name: 自動収益化パイプライン（毎日実行）
 
 on:
   schedule:
-    # 毎日 JST 9:00 に実行（UTC 0:00）
-    - cron: "0 0 * * *"
+    # デバッグ中: 30分毎に実行（安定したら毎日JST9時に戻す）
+    - cron: "*/30 * * * *"
   workflow_dispatch:   # 手動実行も可能
 
 jobs:
