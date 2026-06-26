@@ -77,7 +77,7 @@ def run_pipeline() -> None:
         # 3. WordPress 投稿
         try:
             result = poster.post(article)
-            succeeded.append(f"{campaign.service_name} → {result.get('link', '')}")
+            succeeded.append(f"{campaign.service_name} → {result.get('url', '')}")
         except Exception as exc:
             notify_error(exc, f"Step 3: WordPress 投稿失敗 ({campaign.service_name})")
             failed.append(campaign.service_name)

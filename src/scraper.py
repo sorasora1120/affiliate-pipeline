@@ -112,6 +112,7 @@ class A8Scraper:
                     or any(n in name for n in self._NOISE)
                     or name.startswith("→")
                     or re.match(r"^[\d,]+$", name)
+                    or re.match(r"^[\d,]+円", name)
                     or "件" in name
                     or name in ("0円", "円")
                 )
