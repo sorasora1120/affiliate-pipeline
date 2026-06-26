@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # URL・セレクタ定数
 # ---------------------------------------------------------------------------
 LOGIN_URL    = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"  # セルフバック直接ログイン
-SELFBACK_URL = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
+SELFBACK_URL = "https://pub.a8.net/a8v2/selfback/asSearchAction.do?sortKey=reward&sortType=desc&pageNo=1"
 
 # ログインフォーム
 SEL_LOGIN_ID   = "input[name='loginId'], input[type='email'], #loginId, #email"
@@ -159,22 +159,24 @@ class A8Scraper:
         page.goto(selfback_url, wait_until="networkidle", timeout=30_000)
         page.wait_for_timeout(2000)
 
-        # デバッグ: スクリーンショット＋HTML先頭3000字を出力
+        # JS描画を待つ（検索結果ページ）
+        page.wait_for_timeout(5000)
         page.screenshot(path="debug_selfback.png")
-        html_preview = page.content()[:3000]
-        logger.info("セルフバックページHTML（先頭3000字）:\n%s", html_preview)
 
         # デバッグ: 各セレクタで何件ヒットするか確認
         debug_selectors = [
-            "li", "li.item", "ul.itemList li", "div.item", "div.tile",
-            "div.program", "table tr", ".ad-item", "[class*='item']",
-            "[class*='tile']", "[class*='program']", "[class*='ad']",
-            "ul li", ".list li", "#itemList li",
+            "li", "tr", "div.item", "ul li", "table tr",
+            "[class*='item']", "[class*='list']", "[class*='result']",
+            "[class*='program']", "[class*='ad']", "dl", "dt", "dd",
         ]
         for sel in debug_selectors:
             count = page.locator(sel).count()
             if count > 0:
                 logger.info("セレクタ '%s': %d 件ヒット", sel, count)
+
+        # HTML先頭も出力
+        html_preview = page.content()[:2000]
+        logger.info("HTMLプレビュー:\n%s", html_preview)
 
         page_num = 1
         while True:
