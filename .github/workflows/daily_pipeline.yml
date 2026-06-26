@@ -27,29 +27,29 @@ jobs:
       - name: Playwright ブラウザをインストール
         run: playwright install chromium --with-deps
 
-      - name: パイプラインを実行
+      - name: セルフバック自動申込
         env:
-          # A8.net 認証
           A8_USERNAME: ${{ secrets.A8_USERNAME }}
           A8_PASSWORD: ${{ secrets.A8_PASSWORD }}
+          APPLICANT_NAME: ${{ secrets.APPLICANT_NAME }}
+          APPLICANT_NAME_KANA: ${{ secrets.APPLICANT_NAME_KANA }}
+          APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python run_selfback.py
 
-          # Claude API
+      - name: パイプラインを実行
+        env:
+          A8_USERNAME: ${{ secrets.A8_USERNAME }}
+          A8_PASSWORD: ${{ secrets.A8_PASSWORD }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
-          # はてなブログ
           HATENA_ID: ${{ secrets.HATENA_ID }}
           HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
           HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
           HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'no' }}
-
-          # Discord
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-          # 動作パラメータ（必要に応じて GitHub Variables で上書き可）
           MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '5000' }}
           MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '3' }}
           ARTICLE_INTERVAL_SECONDS: ${{ vars.ARTICLE_INTERVAL_SECONDS || '30' }}
-
         run: python main.py
 
       - name: デバッグ用スクリーンショットを保存
