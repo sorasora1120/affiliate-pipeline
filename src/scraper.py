@@ -1,5 +1,5 @@
 """
-A8.net セルフバック案件スクレイパー（Playwright + JS抽出版）
+A8.net セルフバック案件スクレイパー
 """
 
 import logging
@@ -12,8 +12,7 @@ from playwright.sync_api import sync_playwright, Page
 
 logger = logging.getLogger(__name__)
 
-LOGIN_URL    = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
-SEARCH_URL   = "https://pub.a8.net/a8v2/selfback/asSearchAction.do?sortKey=reward&sortType=desc&pageNo={page}"
+LOGIN_URL = "https://pub.a8.net/a8v2/selfback/asIndexAction.do"
 
 
 @dataclass
@@ -36,110 +35,78 @@ class A8Scraper:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             page = browser.new_context(
-                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
                 locale="ja-JP",
             ).new_page()
             try:
-                self._login(page)
-                campaigns = self._scrape(page, min_reward)
+                body_text = self._login_and_capture(page)
+                campaigns = self._parse_campaigns(body_text, page.url, min_reward)
+
+                # 0件ならページ全体のHTMLも送る
+                if not campaigns:
+                    html = page.content()[:1500]
+                    notify_discord(f"[scraper] 0件 / ページHTML先頭:\n{html}")
             finally:
                 browser.close()
 
-        logger.info("取得案件数: %d 件（%d 円以上）", len(campaigns), min_reward)
-        summary = "\n".join(f"・{c.service_name}（{c.reward_amount:,}円）" for c in campaigns[:10])
-        notify_discord(f"案件取得完了: {len(campaigns)}件\n{summary}")
+        notify_discord(f"[scraper] 取得完了 {len(campaigns)}件 (閾値{min_reward}円以上)\n" +
+                       "\n".join(f"・{c.service_name} {c.reward_amount:,}円" for c in campaigns[:10]))
         return campaigns
 
-    # ------------------------------------------------------------------
-    # ログイン
-    # ------------------------------------------------------------------
-
-    def _login(self, page: Page) -> None:
-        logger.info("セルフバックにログイン中...")
+    def _login_and_capture(self, page: Page) -> str:
+        """ログインして、ページのテキストを即座に取得して返す"""
+        logger.info("ログイン中: %s", LOGIN_URL)
         page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+        page.screenshot(path="debug_login.png")
 
-        # ログインフォーム入力
         page.locator("input[type='text']").first.fill(self.username)
         page.locator("input[type='password']").first.fill(self.password)
 
         with page.expect_navigation(wait_until="networkidle", timeout=20_000):
             page.evaluate("document.querySelector('form').submit()")
 
-        page.wait_for_timeout(2000)
-        page.screenshot(path="debug_login_after.png")
+        page.screenshot(path="debug_after_login.png")
+        logger.info("ログイン後URL: %s", page.url)
 
         if "indexLogin" in page.url or "asLoginAction" in page.url:
-            raise RuntimeError(
-                f"ログイン失敗（URL: {page.url}）\n"
-                "A8_USERNAME と A8_PASSWORD を確認してください。"
-            )
-        logger.info("ログイン成功: %s", page.url)
+            raise RuntimeError(f"ログイン失敗: {page.url}")
 
-    # ------------------------------------------------------------------
-    # スクレイピング（ページテキスト解析方式）
-    # ------------------------------------------------------------------
+        # ログイン直後に即テキスト取得（JSリダイレクト前）
+        body_text = page.locator("body").inner_text()
+        logger.info("ページテキスト取得 %d字", len(body_text))
 
-    def _scrape(self, page: Page, min_reward: int) -> list[Campaign]:
         from .notifier import notify_discord
+        notify_discord(f"[scraper] ログイン成功 url={page.url}\nテキスト({len(body_text)}字):\n{body_text[:800]}")
+
+        return body_text
+
+    def _parse_campaigns(self, text: str, base_url: str, min_reward: int) -> list[Campaign]:
+        """ページテキストから案件を抽出"""
         campaigns: list[Campaign] = []
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
 
-        notify_discord(f"[v5] スクレイプ開始 url={page.url}")
-        page.wait_for_timeout(5000)
-        page.screenshot(path="debug_selfback.png")
-        notify_discord(f"[v5] 5秒後 url={page.url}")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            # 金額パターンを探す
+            m = re.search(r"([\d,]+)円", line)
+            if m:
+                amount = int(m.group(1).replace(",", ""))
+                # サービス名は直前の行
+                name = lines[i - 1] if i > 0 else line
+                name = re.sub(r"[\d,]+円.*", "", name).strip()
+                if not name:
+                    name = line[:40]
 
-        try:
-            full_text = page.locator("body").inner_text()
-        except Exception as e:
-            full_text = ""
-            notify_discord(f"[v5] inner_text失敗: {e}")
-
-        notify_discord(f"[v5] テキスト({len(full_text)}字):\n{full_text[:700]}")
-
-        all_links = page.evaluate("""
-            () => Array.from(document.querySelectorAll('a')).map(a => ({
-                text: a.innerText.trim(),
-                href: a.href
-            })).filter(a => a.text.length > 0)
-        """)
-        notify_discord(f"[v5] リンク={len(all_links)}件 / 円含む={sum(1 for l in all_links if '円' in l.get('text',''))}")
-
-        # 「円」を含むリンクを案件候補として抽出
-        for link in all_links:
-            text = link.get("text", "")
-            href = link.get("href", "")
-            if "円" not in text:
-                continue
-            amounts = [int(re.sub(r"[^\d]", "", m)) for m in re.findall(r"[\d,]+円", text)]
-            if not amounts:
-                continue
-            reward_amount = max(amounts)
-            if reward_amount < min_reward:
-                continue
-            service_name = re.sub(r"[\d,]+円.*", "", text).strip()[:50] or text[:50]
-            if not service_name or any(c.service_name == service_name for c in campaigns):
-                continue
-            campaigns.append(Campaign(
-                service_name=service_name,
-                reward_amount=reward_amount,
-                description=text[:200],
-                url=href,
-            ))
-            logger.info("案件: %s (%d円)", service_name, reward_amount)
-
-        # リンクで見つからない場合はテキスト全体から正規表現で抽出
-        if not campaigns:
-            logger.info("リンク抽出0件のためテキスト解析を試みます")
-            for match in re.finditer(r"([^\d\n]{4,40}?)([\d,]{4,}円)", full_text):
-                name = match.group(1).strip()
-                amount = int(re.sub(r"[^\d]", "", match.group(2)))
-                if amount >= min_reward and name and not any(c.service_name == name for c in campaigns):
-                    campaigns.append(Campaign(
-                        service_name=name,
-                        reward_amount=amount,
-                        description="",
-                        url=page.url,
-                    ))
-                    logger.info("テキスト解析案件: %s (%d円)", name, amount)
+                if amount >= min_reward and len(name) > 1:
+                    if not any(c.service_name == name for c in campaigns):
+                        campaigns.append(Campaign(
+                            service_name=name,
+                            reward_amount=amount,
+                            description=line,
+                            url=base_url,
+                        ))
+                        logger.info("案件: %s (%d円)", name, amount)
+            i += 1
 
         return campaigns
