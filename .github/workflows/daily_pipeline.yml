@@ -2,8 +2,9 @@ name: 自動収益化パイプライン（毎日実行）
 
 on:
   schedule:
-    # 毎日 JST 9:00 に実行（UTC 0:00）
+    # JST 9:00 と 21:00 の1日2回実行
     - cron: "0 0 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch:   # 手動実行も可能
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
           HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
           HATENA_DRAFT: ${{ vars.HATENA_DRAFT || 'no' }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '5000' }}
+          MIN_REWARD_YEN: ${{ vars.MIN_REWARD_YEN || '0' }}
           MAX_ARTICLES_PER_RUN: ${{ vars.MAX_ARTICLES_PER_RUN || '5' }}
           ARTICLE_INTERVAL_SECONDS: ${{ vars.ARTICLE_INTERVAL_SECONDS || '30' }}
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
