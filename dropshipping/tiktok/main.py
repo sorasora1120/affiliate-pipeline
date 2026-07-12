@@ -24,6 +24,7 @@ SCRIPTS_DIR = Path(__file__).parent / "scripts"
 SCRIPTS_DIR.mkdir(exist_ok=True)
 
 PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "")
+DISCORD_DROPSHIP_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_DROPSHIP", "")
 
 
 def run() -> None:
@@ -71,7 +72,7 @@ def run() -> None:
         f"📊 投稿済み: {posted}本 / 残り: {remaining}テーマ\n\n"
         f"---\n**フック（最初3秒）:**\n{script.hook}"
     )
-    notify_discord(message)
+    notify_discord(message, webhook_url=DISCORD_DROPSHIP_WEBHOOK or None)
     logger.info("Discord通知送信完了")
 
     print(markdown)

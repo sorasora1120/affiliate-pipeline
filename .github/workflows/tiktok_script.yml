@@ -27,7 +27,7 @@ jobs:
       - name: TikTok台本を生成
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_DROPSHIP: ${{ secrets.DISCORD_WEBHOOK_DROPSHIP }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python -m dropshipping.tiktok.main
 

@@ -7,17 +7,17 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def notify_discord(message: str, is_error: bool = False) -> None:
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
+def notify_discord(message: str, is_error: bool = False, webhook_url: str | None = None) -> None:
+    url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
+    if not url:
         logger.warning("DISCORD_WEBHOOK_URL が未設定のため通知をスキップします")
         return
 
     prefix = ":red_circle: **[ERROR]**" if is_error else ":white_check_mark: **[INFO]**"
-    payload = {"content": f"{prefix}\n```\n{message[:1800]}\n```"}
+    payload = {"content": f"{prefix}\n{message[:1900]}"}
 
     try:
-        resp = requests.post(webhook_url, json=payload, timeout=10)
+        resp = requests.post(url, json=payload, timeout=10)
         resp.raise_for_status()
     except Exception as exc:
         logger.error("Discord 通知に失敗しました: %s", exc)
