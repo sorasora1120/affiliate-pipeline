@@ -4,3 +4,16 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# 動画・キャッシュ（大きいのでGit管理外）
+dropshipping/tiktok/videos/
+dropshipping/tiktok/video_cache/
+
+# ログ・一時ファイル
+*.log
+auto_v3_log.txt
+*.mp4
+
+# 認証情報
+client_secrets.json
+studio.youtube.com_cookies.txt
