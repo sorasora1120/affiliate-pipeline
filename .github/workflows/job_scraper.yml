@@ -1,0 +1,49 @@
+name: 案件収集パイプライン（CrowdWorks / ココナラ）
+
+on:
+  schedule:
+    # JST 9:00, 13:00, 18:00, 22:00 の1日4回実行（負荷をかけすぎない頻度）
+    - cron: "0 0,4,9,13 * * *"
+  workflow_dispatch:   # 手動実行も可能
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 依存パッケージをインストール
+        working-directory: job_scraper
+        run: pip install -r requirements.txt
+
+      - name: Playwright ブラウザをインストール
+        run: playwright install chromium --with-deps
+
+      - name: 案件収集を実行
+        working-directory: job_scraper
+        env:
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,動画編集,動画制作' }}
+          MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '20' }}
+          REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
+
+      - name: デバッグ用スクリーンショットを保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-scraper-debug
+          path: job_scraper/debug_*.png
+          if-no-files-found: ignore
