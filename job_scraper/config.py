@@ -8,7 +8,10 @@ load_dotenv(Path(__file__).parent / ".env")
 # 検索キーワード（カンマ区切りで環境変数から上書き可能）
 KEYWORDS = [
     k.strip()
-    for k in os.getenv("JOB_KEYWORDS", "ロゴ,ロゴデザイン,動画編集,動画制作").split(",")
+    for k in os.getenv(
+        "JOB_KEYWORDS",
+        "ロゴ,ロゴデザイン,動画編集,動画制作,サイト制作,ホームページ制作,ECサイト構築",
+    ).split(",")
     if k.strip()
 ]
 

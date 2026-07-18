@@ -18,6 +18,9 @@ CATEGORY_TEMPLATES: dict[str, str] = {
     "ロゴデザイン": DEFAULT_TEMPLATE,
     "動画編集": DEFAULT_TEMPLATE,
     "動画制作": DEFAULT_TEMPLATE,
+    "サイト制作": DEFAULT_TEMPLATE,
+    "ホームページ制作": DEFAULT_TEMPLATE,
+    "ECサイト構築": DEFAULT_TEMPLATE,
 }
 
 

@@ -102,6 +102,10 @@ class CoconalaScraper:
                 except Exception:
                     pass
 
+            # 「おすすめの仕事」等、検索キーワードと無関係なウィジェットのリンクを除外
+            if keyword not in title and keyword not in surrounding:
+                continue
+
             budget_match = BUDGET_RE.search(surrounding)
             budget_text = budget_match.group(0) if budget_match else "不明"
 
