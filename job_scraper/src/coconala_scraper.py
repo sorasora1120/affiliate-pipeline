@@ -114,9 +114,10 @@ class CoconalaScraper:
                 except Exception:
                     pass
 
-            # 「おすすめの仕事」等、検索キーワードと無関係なウィジェットのリンクを除外
-            if keyword not in title and keyword not in surrounding:
-                continue
+            # CrowdWorksと違い、ここでは検索結果に無関係ウィジェットが混ざる問題は
+            # 確認されていない一方、ココナラの検索はキーワード完全一致ではなく緩い
+            # 関連度判定なので、厳密フィルターをかけると常に0件になってしまう。
+            # そのためここでは絞り込まず、ココナラ自身の検索結果をそのまま信頼する。
 
             budget_match = BUDGET_RE.search(surrounding)
             budget_text = budget_match.group(0) if budget_match else "不明"
