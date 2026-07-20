@@ -40,7 +40,12 @@ class CrowdWorksScraper:
                     url = SEARCH_URL.format(keyword=quote(keyword))
                     logger.info("CrowdWorks 検索: %s (%s)", keyword, url)
                     try:
-                        page.goto(url, wait_until="networkidle", timeout=30_000)
+                        # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
+                        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                        try:
+                            page.wait_for_selector("a[href*='/public/jobs/']", timeout=10_000)
+                        except Exception:
+                            pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
                     except Exception as exc:
                         logger.warning("ページ読み込み失敗 (%s): %s", keyword, exc)
                         continue
