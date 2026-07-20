@@ -99,25 +99,23 @@ class CoconalaScraper:
                 continue
             seen_ids.add(job_id)
 
-            title = (link.inner_text() or "").strip()
-            if len(title) < 3:
-                continue
-
             full_url = href if href.startswith("http") else f"https://coconala.com{href}"
 
-            surrounding = title
+            # カード内のリンク自体（画像用ラッパー）は中身が空文字のことが多く、
+            # 実際のタイトルはカード全体（親要素）のテキストの2行目
+            # （1行目はカテゴリラベル）にある。<li>等の意味的な祖先要素は
+            # 存在しないため、xpath=.. で直接カード全体を取りに行く
+            # （../.. まで遡ると複数カードをまとめた共通の親に当たってしまい、
+            # 全件で同じ1件目の内容を拾ってしまうので1階層のみにする）。
             try:
-                surrounding = link.locator("xpath=ancestor::li[1]").inner_text()
+                surrounding = link.locator("xpath=..").inner_text(timeout=5_000)
             except Exception:
-                try:
-                    surrounding = link.locator("xpath=../..").inner_text()
-                except Exception:
-                    pass
+                surrounding = (link.inner_text() or "").strip()
 
-            # CrowdWorksと違い、ここでは検索結果に無関係ウィジェットが混ざる問題は
-            # 確認されていない一方、ココナラの検索はキーワード完全一致ではなく緩い
-            # 関連度判定なので、厳密フィルターをかけると常に0件になってしまう。
-            # そのためここでは絞り込まず、ココナラ自身の検索結果をそのまま信頼する。
+            lines = [l.strip() for l in surrounding.split("\n") if l.strip()]
+            title = lines[1] if len(lines) > 1 else (lines[0] if lines else "")
+            if len(title) < 3:
+                continue
 
             budget_match = BUDGET_RE.search(surrounding)
             budget_text = budget_match.group(0) if budget_match else "不明"
