@@ -42,6 +42,9 @@ class CoconalaScraper:
                             page.wait_for_selector("a[href*='/requests/']", timeout=10_000)
                         except Exception:
                             pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
+                        # 検索結果はJSで非同期に絞り込まれるため、初期表示（全件）が
+                        # 書き換わるまで少し待つ
+                        page.wait_for_timeout(3_000)
                     except Exception as exc:
                         logger.warning("ページ読み込み失敗 (%s): %s", keyword, exc)
                         continue
