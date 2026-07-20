@@ -31,14 +31,15 @@ jobs:
           APPLICANT_NAME_KANA: ${{ secrets.APPLICANT_NAME_KANA }}
           APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python -c "
-from src.selfback_applier import SelfbackApplier
-from src.notifier import notify_discord
-applier = SelfbackApplier()
-results = applier.run(max_apply=10)
-applied = [r for r in results if r.status == 'applied']
-notify_discord(f'=== 自動申込完了 ===\n申込成功: {len(applied)}件\n合計報酬見込: {sum(r.reward for r in applied):,}円')
-"
+        run: |
+          python - <<'PYEOF'
+          from src.selfback_applier import SelfbackApplier
+          from src.notifier import notify_discord
+          applier = SelfbackApplier()
+          results = applier.run(max_apply=10)
+          applied = [r for r in results if r.status == 'applied']
+          notify_discord(f'=== 自動申込完了 ===\n申込成功: {len(applied)}件\n合計報酬見込: {sum(r.reward for r in applied):,}円')
+          PYEOF
 
       - name: スクリーンショット保存
         if: always()
