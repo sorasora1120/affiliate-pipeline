@@ -1,5 +1,7 @@
-name: 案件収集パイプライン（CrowdWorks / ココナラ）
+name: 案件収集パイプライン（ココナラ）
 
+# CrowdWorksはGitHub Actionsのクラウド共有IPから403 Forbiddenで拒否されるため、
+# ここではココナラのみ実行する（CrowdWorksはローカルPCから実行: job_scraper/run_local_crowdworks.bat）
 on:
   schedule:
     # JST 9:00, 13:00, 18:00, 22:00 の1日4回実行（負荷をかけすぎない頻度）
@@ -31,6 +33,7 @@ jobs:
       - name: 案件収集を実行
         working-directory: job_scraper
         env:
+          PLATFORMS: coconala
           JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,動画編集,動画制作,サイト制作,ホームページ制作,ECサイト構築' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '20' }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
