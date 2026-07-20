@@ -41,22 +41,25 @@ def run() -> None:
     logger.info("既存案件: %d件", len(existing_urls))
 
     all_jobs = []
+    logger.info("対象プラットフォーム: %s", ", ".join(sorted(config.PLATFORMS)))
 
-    try:
-        cw_jobs = CrowdWorksScraper().fetch_jobs(
-            config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
-        )
-        all_jobs.extend(cw_jobs)
-    except Exception as exc:
-        notify_error(exc, "CrowdWorks スクレイピング失敗")
+    if "crowdworks" in config.PLATFORMS:
+        try:
+            cw_jobs = CrowdWorksScraper().fetch_jobs(
+                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
+            )
+            all_jobs.extend(cw_jobs)
+        except Exception as exc:
+            notify_error(exc, "CrowdWorks スクレイピング失敗")
 
-    try:
-        coconala_jobs = CoconalaScraper().fetch_jobs(
-            config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
-        )
-        all_jobs.extend(coconala_jobs)
-    except Exception as exc:
-        notify_error(exc, "ココナラ スクレイピング失敗")
+    if "coconala" in config.PLATFORMS:
+        try:
+            coconala_jobs = CoconalaScraper().fetch_jobs(
+                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
+            )
+            all_jobs.extend(coconala_jobs)
+        except Exception as exc:
+            notify_error(exc, "ココナラ スクレイピング失敗")
 
     new_jobs = [job for job in all_jobs if job.url not in existing_urls]
     logger.info("新着案件: %d件（全%d件中）", len(new_jobs), len(all_jobs))

@@ -23,6 +23,15 @@ REQUEST_INTERVAL_SECONDS = float(os.getenv("REQUEST_INTERVAL_SECONDS", "3"))
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
+# "crowdworks", "coconala" のカンマ区切り。CrowdWorksはクラウドIPが403で弾かれるため、
+# 実行環境ごとに対象を切り替えられるようにしている（例: GitHub Actionsはココナラのみ、
+# ローカルPCはCrowdWorksのみ）
+PLATFORMS = {
+    p.strip().lower()
+    for p in os.getenv("PLATFORMS", "crowdworks,coconala").split(",")
+    if p.strip()
+}
+
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 GOOGLE_WORKSHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME", "案件一覧")
 GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
