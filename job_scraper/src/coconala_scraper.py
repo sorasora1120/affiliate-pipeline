@@ -16,7 +16,11 @@ from .models import JobPosting
 logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
-SEARCH_URL = "https://coconala.com/requests?keyword={keyword}&sort=new"
+
+# sort=new（新着順）だと緩いキーワード一致でもたまたま直近投稿された無関係案件が
+# 上位に来てしまい、キーワード関連度フィルターで毎回弾かれていた。関連度順（デフォルト）
+# の方が実際に検索語と関係あるものが上位に来るため、こちらを使う。
+SEARCH_URL = "https://coconala.com/requests?keyword={keyword}"
 DETAIL_URL_RE = re.compile(r"/requests/(\d+)")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
