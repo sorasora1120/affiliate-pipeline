@@ -34,7 +34,7 @@ jobs:
         working-directory: job_scraper
         env:
           PLATFORMS: coconala
-          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,動画編集,動画制作,サイト制作,ホームページ制作,ECサイト構築' }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '20' }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}

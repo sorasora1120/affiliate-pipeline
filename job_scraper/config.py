@@ -10,7 +10,7 @@ KEYWORDS = [
     k.strip()
     for k in os.getenv(
         "JOB_KEYWORDS",
-        "ロゴ,ロゴデザイン,動画編集,動画制作,サイト制作,ホームページ制作,ECサイト構築",
+        "ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築",
     ).split(",")
     if k.strip()
 ]
