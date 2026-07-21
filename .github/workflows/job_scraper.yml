@@ -40,7 +40,7 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
         run: python main.py
 
       - name: デバッグ用スクリーンショットを保存
