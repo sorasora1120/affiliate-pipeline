@@ -37,6 +37,13 @@ class SheetsWriter:
         values = self.worksheet.col_values(url_col_index)[1:]  # ヘッダーを除く
         return set(values)
 
+    def all_records(self) -> list[dict]:
+        return self.worksheet.get_all_records()
+
+    def update_status(self, row_number: int, status: str) -> None:
+        status_col = HEADER.index("ステータス") + 1
+        self.worksheet.update_cell(row_number, status_col, status)
+
     def append_jobs(self, jobs: list[JobPosting], proposals: dict[str, str]) -> None:
         if not jobs:
             return
