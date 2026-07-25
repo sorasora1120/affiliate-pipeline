@@ -49,4 +49,8 @@ WORKER_MATCH_EXCLUDE_KEYWORDS = [
     if k.strip()
 ]
 WORKER_MATCH_MIN_BUDGET_YEN = int(os.getenv("WORKER_MATCH_MIN_BUDGET_YEN", "8000"))
-WORKER_MATCH_MARGIN_YEN = int(os.getenv("WORKER_MATCH_MARGIN_YEN", "5000"))
+# マージンは予算の一定割合を、下限〜上限の範囲でスライドさせる
+# （固定額だと小さい案件では割合が大きすぎ、大きい案件では小さすぎるため）
+WORKER_MATCH_MARGIN_PERCENT = float(os.getenv("WORKER_MATCH_MARGIN_PERCENT", "20"))
+WORKER_MATCH_MARGIN_MIN_YEN = int(os.getenv("WORKER_MATCH_MARGIN_MIN_YEN", "3000"))
+WORKER_MATCH_MARGIN_MAX_YEN = int(os.getenv("WORKER_MATCH_MARGIN_MAX_YEN", "10000"))

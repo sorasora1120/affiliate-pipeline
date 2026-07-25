@@ -42,7 +42,9 @@ def run() -> None:
         target_categories=config.WORKER_MATCH_CATEGORIES,
         excluded_keywords=config.WORKER_MATCH_EXCLUDE_KEYWORDS,
         min_budget_yen=config.WORKER_MATCH_MIN_BUDGET_YEN,
-        margin_yen=config.WORKER_MATCH_MARGIN_YEN,
+        margin_percent=config.WORKER_MATCH_MARGIN_PERCENT,
+        margin_min_yen=config.WORKER_MATCH_MARGIN_MIN_YEN,
+        margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
     )
     logger.info("マッチング候補: %d件", len(candidates))
 
