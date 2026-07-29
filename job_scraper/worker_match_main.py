@@ -52,8 +52,10 @@ def run() -> None:
         if r.get("ステータス") == "未チェック" and r.get("カテゴリ") in config.WORKER_MATCH_CATEGORIES
     ]
     logger.info("「未チェック」×対象カテゴリ: %d件", len(unchecked_in_target))
+    budget_unknown = sum(1 for r in unchecked_in_target if r.get("予算") == "不明")
+    logger.info("うち予算=不明: %d件", budget_unknown)
     for r in unchecked_in_target[:10]:
-        logger.info("  例: タイトル=%r 予算=%r", r.get("タイトル"), r.get("予算"))
+        logger.info("  例: タイトル=%r 予算=%r URL=%r", r.get("タイトル"), r.get("予算"), r.get("URL"))
 
     candidates = find_candidates(
         rows,
