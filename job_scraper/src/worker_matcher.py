@@ -117,7 +117,22 @@ def find_candidates(
     return candidates
 
 
-def format_job_message(c: dict, client_info: dict | None = None) -> str:
+def _proposal_and_worker_msg(c: dict) -> tuple[str, str]:
+    if c["amount"] is None:
+        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
+        worker_msg = (
+            f'Hi Marzia! New project: {c["title"]}. '
+            f"Client hasn't given a fixed budget yet (quote-based). "
+            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?"
+        )
+    else:
+        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
+        worker_msg = f'Hi Marzia! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
+    return proposal, worker_msg
+
+
+def format_info_message(c: dict, client_info: dict | None = None) -> str:
+    """自分用の要点（1通目）。"""
     client_info = client_info or {}
     client_name = client_info.get("client_name", "不明")
     rating = client_info.get("rating", "")
@@ -130,26 +145,26 @@ def format_job_message(c: dict, client_info: dict | None = None) -> str:
         client_line += "）"
 
     if c["amount"] is None:
-        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
         budget_line = "💰 クライアント予算: 見積り希望（要相談・金額はまだ不明）"
-        worker_msg = (
-            f'Hi Marzia! New project: {c["title"]}. '
-            f"Client hasn't given a fixed budget yet (quote-based). "
-            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?"
-        )
     else:
-        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
         budget_line = f"💰 クライアント予算 {c['amount']:,}円 / あなたの利益目安 {c['margin']:,}円"
-        worker_msg = f'Hi Marzia! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
 
     return (
         f"■ {c['title']}\n"
         f"🔗 {c['url']}\n"
         f"📁 カテゴリ: {c['category']} / プラットフォーム: {c['platform']}\n"
         f"{budget_line}\n"
-        f"{client_line}\n"
-        f"\n--- ワーカーへ（コピペ用） ---\n"
-        f"```\n{worker_msg}\n```\n"
-        f"\n--- クライアントへの提案文（下書き・●●部分は要編集） ---\n"
-        f"```\n{proposal}\n```"
+        f"{client_line}"
     )
+
+
+def format_worker_message(c: dict) -> str:
+    """マルツィアさんへ送るコピペ用メッセージ（2通目）。"""
+    _, worker_msg = _proposal_and_worker_msg(c)
+    return f"--- ワーカーへ（コピペ用） ---\n```\n{worker_msg}\n```"
+
+
+def format_proposal_message(c: dict) -> str:
+    """クライアントへの提案文の下書き（3通目・要編集）。"""
+    proposal, _ = _proposal_and_worker_msg(c)
+    return f"--- クライアントへの提案文（下書き・●●部分は要編集） ---\n```\n{proposal}\n```"

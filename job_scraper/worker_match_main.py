@@ -16,7 +16,13 @@ import config
 from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
-from src.worker_matcher import PROPOSED_STATUS, find_candidates, format_job_message
+from src.worker_matcher import (
+    PROPOSED_STATUS,
+    find_candidates,
+    format_info_message,
+    format_proposal_message,
+    format_worker_message,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,11 +66,20 @@ def run() -> None:
         logger.warning("依頼者情報の取得に失敗しました: %s", exc)
         client_info_map = {}
 
+    sent = 0
     for c in candidates:
-        notify_discord(format_job_message(c, client_info_map.get(c["url"])))
-        sheet.update_status(c["row"], PROPOSED_STATUS)
+        try:
+            notify_discord(format_info_message(c, client_info_map.get(c["url"])))
+            notify_discord(format_worker_message(c))
+            notify_discord(format_proposal_message(c))
+            sheet.update_status(c["row"], PROPOSED_STATUS)
+            sent += 1
+        except Exception as exc:
+            # 1件の通知/更新失敗で残り全件が止まらないようにする
+            # （長時間放置される想定のため、1件の異常で通知が止まるのが一番困る）
+            logger.warning("案件の通知に失敗しました (row=%s): %s", c.get("row"), exc)
 
-    logger.info("%d件を「%s」に更新しました", len(candidates), PROPOSED_STATUS)
+    logger.info("%d/%d件を「%s」に更新しました", sent, len(candidates), PROPOSED_STATUS)
 
 
 if __name__ == "__main__":
