@@ -69,9 +69,17 @@ def run() -> None:
     sent = 0
     for c in candidates:
         try:
-            notify_discord(format_info_message(c, client_info_map.get(c["url"])))
-            notify_discord(format_worker_message(c))
-            notify_discord(format_proposal_message(c))
+            ok = (
+                notify_discord(format_info_message(c, client_info_map.get(c["url"])))
+                and notify_discord(format_worker_message(c))
+                and notify_discord(format_proposal_message(c))
+            )
+            if not ok:
+                # Discord送信が1通でも失敗した案件はステータスを更新しない。
+                # 「未チェック」のまま残せば次回実行時に自動的に再送されるので、
+                # 送信失敗＝ステータスだけ進んで内容が消える、という事態を防ぐ。
+                logger.warning("Discord通知が一部失敗したため未チェックのまま残します (row=%s)", c.get("row"))
+                continue
             sheet.update_status(c["row"], PROPOSED_STATUS)
             sent += 1
         except Exception as exc:
