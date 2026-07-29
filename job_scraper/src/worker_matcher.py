@@ -41,6 +41,28 @@ Web制作を中心に、多数のご依頼に対応してまいりました。
 ご不明点等ございましたら、お気軽にお問い合わせください。
 ご検討のほど、よろしくお願いいたします。"""
 
+# 予算が「見積り希望」等で未提示の案件用（金額を書けないため、まず要件確認を提案する）
+PROPOSAL_TEMPLATE_QUOTE = """はじめまして。◯◯と申します。
+この度の募集内容「{title}」を拝見し、ご提案いたします。
+
+【お見積りについて】
+内容によって金額が変動するため、まずは詳細をお伺いしたうえで
+お見積りをご提示させていただければと思います。
+
+【進め方】
+1. ヒアリング・要件確認
+2. お見積りのご提示
+3. デザイン・構成案のご提示
+4. 制作・実装
+5. テスト・最終確認・納品
+
+【実績】
+Web制作を中心に、多数のご依頼に対応してまいりました。
+募集内容を拝見し、ご期待に沿えると考え、ご提案させていただきました。
+
+詳細をお伺いできましたら、具体的なお見積りをご提示いたします。
+ご検討のほど、よろしくお願いいたします。"""
+
 
 def _calc_margin(amount: int, percent: float, min_yen: int, max_yen: int) -> int:
     margin = amount * percent / 100
@@ -66,9 +88,24 @@ def find_candidates(
         title = r.get("タイトル", "")
         if any(kw in title for kw in excluded_keywords):
             continue
+
         m = re.search(r"([\d,]+)\s*円", r.get("予算", ""))
+        base = {
+            "row": idx,
+            "platform": r.get("プラットフォーム"),
+            "category": category,
+            "title": title,
+            "url": r.get("URL"),
+        }
+
         if not m:
+            # 予算未提示（「見積り希望」等）の案件。ココナラの依頼系案件は
+            # 金額を出さずクライアントからの見積もり提案を待つものが多く、
+            # ここで弾くと本来アプローチすべき案件まで消えてしまう。
+            # 金額計算はできないので「要見積もり」として金額情報なしで通知する。
+            candidates.append({**base, "amount": None, "margin": None, "quote": None})
             continue
+
         amount = int(m.group(1).replace(",", ""))
         if amount < min_budget_yen:
             continue
@@ -76,16 +113,7 @@ def find_candidates(
         quote = amount - margin
         if quote <= 0:
             continue
-        candidates.append({
-            "row": idx,
-            "platform": r.get("プラットフォーム"),
-            "category": category,
-            "title": title,
-            "amount": amount,
-            "margin": margin,
-            "quote": quote,
-            "url": r.get("URL"),
-        })
+        candidates.append({**base, "amount": amount, "margin": margin, "quote": quote})
     return candidates
 
 
@@ -101,16 +129,27 @@ def format_job_message(c: dict, client_info: dict | None = None) -> str:
             client_line += f" / 発注実績{order_count}件"
         client_line += "）"
 
-    proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
+    if c["amount"] is None:
+        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
+        budget_line = "💰 クライアント予算: 見積り希望（要相談・金額はまだ不明）"
+        worker_msg = (
+            f'Hi Marzia! New project: {c["title"]}. '
+            f"Client hasn't given a fixed budget yet (quote-based). "
+            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?"
+        )
+    else:
+        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
+        budget_line = f"💰 クライアント予算 {c['amount']:,}円 / あなたの利益目安 {c['margin']:,}円"
+        worker_msg = f'Hi Marzia! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
 
     return (
         f"■ {c['title']}\n"
         f"🔗 {c['url']}\n"
         f"📁 カテゴリ: {c['category']} / プラットフォーム: {c['platform']}\n"
-        f"💰 クライアント予算 {c['amount']:,}円 / あなたの利益目安 {c['margin']:,}円\n"
+        f"{budget_line}\n"
         f"{client_line}\n"
         f"\n--- ワーカーへ（コピペ用） ---\n"
-        f'```\nHi Marzia! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?\n```\n'
+        f"```\n{worker_msg}\n```\n"
         f"\n--- クライアントへの提案文（下書き・●●部分は要編集） ---\n"
         f"```\n{proposal}\n```"
     )
