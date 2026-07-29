@@ -38,9 +38,16 @@ GOOGLE_WORKSHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME", "案件一覧")
 GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 
 # ワーカー（Fiverr等）への提案候補マッチング設定
+# 「カテゴリ」列には検索キーワードがそのまま入る（coconala_scraper.py / crowdworks_scraper.py の
+# category=keyword）。ここが実際のKEYWORDSと文字列一致しないと、案件は取得できているのに
+# ワーカーマッチングだけ0件になる（例: 「ECサイト制作」「Shopify」で見つかった案件が、
+# 「ECサイト構築」としか一致しない設定のせいで全部弾かれていた）。
 WORKER_MATCH_CATEGORIES = {
     c.strip()
-    for c in os.getenv("WORKER_MATCH_CATEGORIES", "サイト制作,ホームページ制作,ECサイト構築").split(",")
+    for c in os.getenv(
+        "WORKER_MATCH_CATEGORIES",
+        "サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify",
+    ).split(",")
     if c.strip()
 }
 # ワーカーが対応不可・対象外と分かっているキーワード（案件タイトルに含まれていたら除外）
