@@ -38,6 +38,22 @@ def run() -> None:
         worksheet_name=config.GOOGLE_WORKSHEET_NAME,
     )
     rows = sheet.all_records()
+    logger.info("シート全行数: %d件", len(rows))
+
+    from collections import Counter
+    status_counts = Counter(r.get("ステータス") for r in rows)
+    category_counts = Counter(r.get("カテゴリ") for r in rows)
+    logger.info("ステータス内訳: %s", dict(status_counts))
+    logger.info("カテゴリ内訳: %s", dict(category_counts))
+    logger.info("対象カテゴリ設定: %s", config.WORKER_MATCH_CATEGORIES)
+
+    unchecked_in_target = [
+        r for r in rows
+        if r.get("ステータス") == "未チェック" and r.get("カテゴリ") in config.WORKER_MATCH_CATEGORIES
+    ]
+    logger.info("「未チェック」×対象カテゴリ: %d件", len(unchecked_in_target))
+    for r in unchecked_in_target[:10]:
+        logger.info("  例: タイトル=%r 予算=%r", r.get("タイトル"), r.get("予算"))
 
     candidates = find_candidates(
         rows,
