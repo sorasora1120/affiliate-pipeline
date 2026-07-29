@@ -11,7 +11,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: リポジトリをチェックアウト
@@ -34,7 +34,7 @@ jobs:
         working-directory: job_scraper
         env:
           PLATFORMS: coconala
-          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築' }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '20' }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}

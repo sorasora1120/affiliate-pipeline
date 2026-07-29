@@ -4,9 +4,11 @@
 実行フロー:
   1. CrowdWorks / ココナラ から新着案件を取得
   2. スプレッドシートに既にある案件（URL重複）を除外
-  3. 新規案件について提案文の下書きを生成
-  4. スプレッドシートに追記
-  5. Discord に新着案件を通知（応募の送信はしない）
+  3. （ココナラ）新着案件の詳細ページから「この募集内容に似ている仕事」を辿り、
+     キーワード検索だけでは拾えなかった関連案件を追加発見
+  4. 新規案件について提案文の下書きを生成
+  5. スプレッドシートに追記
+  6. Discord に新着案件を通知（応募の送信はしない）
 """
 import logging
 import sys
@@ -16,6 +18,7 @@ from src.coconala_scraper import CoconalaScraper
 from src.crowdworks_scraper import CrowdWorksScraper
 from src.notifier import notify_discord, notify_error
 from src.proposal_generator import generate_proposal
+from src.related_jobs_fetcher import fetch_related_jobs
 from src.sheets_writer import SheetsWriter
 
 logging.basicConfig(
@@ -63,6 +66,21 @@ def run() -> None:
 
     new_jobs = [job for job in all_jobs if job.url not in existing_urls]
     logger.info("新着案件: %d件（全%d件中）", len(new_jobs), len(all_jobs))
+
+    if "coconala" in config.PLATFORMS and new_jobs:
+        try:
+            related = fetch_related_jobs(new_jobs)
+            seen_urls = existing_urls | {job.url for job in new_jobs}
+            extra_jobs = []
+            for job in related:
+                if job.url in seen_urls:
+                    continue
+                seen_urls.add(job.url)
+                extra_jobs.append(job)
+            logger.info("関連案件から新規追加: %d件", len(extra_jobs))
+            new_jobs.extend(extra_jobs)
+        except Exception as exc:
+            notify_error(exc, "関連案件の取得に失敗しました（新着案件の通知は続行します）")
 
     if not new_jobs:
         notify_discord("新着案件はありませんでした。")
