@@ -63,19 +63,22 @@ def fetch_client_info(urls: list[str]) -> dict[str, dict]:
             info = {"client_name": "不明", "rating": "", "order_count": ""}
             heading_text = None
             parser = None
+            xpath = None
             if "coconala.com" in url:
                 heading_text = "募集者情報"
                 parser = _parse_coconala
+                xpath = "xpath=.."  # 見出しの直親に名前/評価がまとまっている
             elif "crowdworks.jp" in url:
                 heading_text = "クライアント情報"
                 parser = _parse_crowdworks
+                xpath = "xpath=../.."  # ココナラと違い、直親だと見出し文字列しか含まれない
 
             if heading_text:
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=20_000)
                     page.wait_for_timeout(2_000)
                     heading = page.get_by_text(heading_text, exact=False).first
-                    text = heading.locator("xpath=..").inner_text(timeout=5_000)
+                    text = heading.locator(xpath).inner_text(timeout=5_000)
                     info = parser(text)
                 except Exception as exc:
                     logger.warning("クライアント情報取得失敗 (%s): %s", url, exc)
