@@ -14,10 +14,15 @@ HEADER = [
     "ステータス", "プラットフォーム", "タイトル", "カテゴリ", "予算", "締切",
     "URL", "検出日時", "提案文（下書き）", "依頼者名", "評価", "実績件数",
     "利益目安（円）", "ワーカー提示額（円）", "ワーカー向けメッセージ", "クライアント提案文（詳細版）",
+    "検出日",
 ]
 
-# 検出日時（H列）のvalue。日別タブのQUERY式で参照するため列位置を固定で持っておく
-_DETECTED_AT_COL_INDEX = HEADER.index("検出日時") + 1  # 8 = H
+# 「検出日」（YYYY-MM-DD、時刻なしの日付専用列）のインデックス。日別タブのQUERY式で参照する。
+# 「検出日時」ではなくこちらを使う理由: append_jobsの過去のバグ（USER_ENTEREDでの日付シリアル値
+# 化）により「検出日時」列には文字列と数値が混在しており、Google Sheets側が列全体の型を
+# 数値/日付と誤推定して文字列のlike比較が列全体で効かなくなっていた。「検出日」は本対応で
+# 新設した列で、常にRAWで書き込まれる純粋な文字列のみが入るため型推定の混線が起きない。
+_DETECTED_DATE_COL_INDEX = HEADER.index("検出日") + 1
 _CANDIDATE_DETAIL_COLS = ["利益目安（円）", "ワーカー提示額（円）", "ワーカー向けメッセージ", "クライアント提案文（詳細版）"]
 # 長文が入る列（0始まりインデックス）。折り返しで行が肥大化しないようクリップ表示にし、
 # 内容に合わせたauto-resizeの対象からも外して固定幅にする
@@ -128,9 +133,8 @@ class SheetsWriter:
         後から依頼者情報やワーカー提案の内容が更新されても自動的に反映される。
         既に同名タブがあれば何もしない。
 
-        注意: 検出日時は文字列としてlike比較しているため、append_jobsをUSER_ENTERED
-        （Sheets側で自動的に日付型に変換されてしまう）で書いていた過去の行は対象外。
-        この関数の導入以降にRAWで書き込まれた行のみが日別タブに表示される。
+        「検出日」列（純粋な文字列のみが入る列）を完全一致で見るため、過去の
+        型混在バグの影響を受けない。
         """
         try:
             self.spreadsheet.worksheet(date_str)
@@ -140,17 +144,16 @@ class SheetsWriter:
 
         ws = self.spreadsheet.add_worksheet(title=date_str, rows=200, cols=len(HEADER))
         last_col = _col_letter(len(HEADER))
-        detected_at_col = _col_letter(_DETECTED_AT_COL_INDEX)
         formula = (
             f"=QUERY('{self.worksheet.title}'!A1:{last_col}, "
-            f"\"select * where Col{_DETECTED_AT_COL_INDEX} like '{date_str}%'\", 1)"
+            f"\"select * where Col{_DETECTED_DATE_COL_INDEX} = '{date_str}'\", 1)"
         )
         ws.update(range_name="A1", values=[[formula]], value_input_option="USER_ENTERED")
         try:
             _apply_sheet_formatting(ws)
         except Exception as exc:
             logger.warning("日別タブ「%s」の書式設定に失敗しました: %s", date_str, exc)
-        logger.info("日別タブ「%s」を作成しました（%s列を検出日時として参照）", date_str, detected_at_col)
+        logger.info("日別タブ「%s」を作成しました（検出日列で参照）", date_str)
 
     def append_jobs(
         self,
@@ -178,6 +181,7 @@ class SheetsWriter:
                 info.get("rating", ""),
                 info.get("order_count", ""),
                 "", "", "", "",
+                job.detected_at[:10],  # "YYYY-MM-DD HH:MM" の先頭10文字 = 日付部分（検出日列）
             ])
         # RAW指定: USER_ENTEREDだと「検出日時」列（"2026-08-01 11:25"のような文字列）が
         # Sheets側で日付シリアル値に自動変換されてしまい、日別タブのQUERY(...like...)による
