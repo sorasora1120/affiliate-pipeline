@@ -20,7 +20,10 @@ from .models import JobPosting
 logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
-SEARCH_URL = "https://crowdworks.jp/public/jobs/search?keyword={keyword}&order=new"
+# 旧パラメータ名は "keyword="だったが、CrowdWorks側の仕様変更で無視されるようになり
+# （フィルタなしの全件検索＝34万件がそのまま返ってきていた）、2026-08-01に実機で
+# 検索ボックスを実際に操作して "search[keywords]=" が正しいパラメータ名だと確認した。
+SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new"
 DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
