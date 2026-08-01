@@ -19,11 +19,52 @@ HEADER = [
 # 検出日時（H列）のvalue。日別タブのQUERY式で参照するため列位置を固定で持っておく
 _DETECTED_AT_COL_INDEX = HEADER.index("検出日時") + 1  # 8 = H
 _CANDIDATE_DETAIL_COLS = ["利益目安（円）", "ワーカー提示額（円）", "ワーカー向けメッセージ", "クライアント提案文（詳細版）"]
+# 長文が入る列（0始まりインデックス）。折り返しで行が肥大化しないようクリップ表示にし、
+# 内容に合わせたauto-resizeの対象からも外して固定幅にする
+_LONG_TEXT_COLUMNS = ["提案文（下書き）", "ワーカー向けメッセージ", "クライアント提案文（詳細版）"]
+_LONG_TEXT_INDICES_0BASED = [HEADER.index(c) for c in _LONG_TEXT_COLUMNS]
 
 
 def _col_letter(index_1based: int) -> str:
     """1始まりの列番号をA〜Z1文字の列記号に変換する（列数が26を超える予定はないため簡易実装）。"""
     return chr(ord("A") + index_1based - 1)
+
+
+def _apply_sheet_formatting(ws) -> None:
+    """見やすさ対策: ヘッダー行固定、長文列はクリップ表示＆固定幅、それ以外は内容に合わせて自動調整。"""
+    sheet_id = ws.id
+    requests = [
+        {
+            "updateSheetProperties": {
+                "properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}},
+                "fields": "gridProperties.frozenRowCount",
+            }
+        },
+    ]
+    for idx in _LONG_TEXT_INDICES_0BASED:
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": idx, "endIndex": idx + 1},
+                "properties": {"pixelSize": 250},
+                "fields": "pixelSize",
+            }
+        })
+    ws.spreadsheet.batch_update({"requests": requests})
+
+    long_ranges = [f"{_col_letter(idx + 1)}1:{_col_letter(idx + 1)}" for idx in _LONG_TEXT_INDICES_0BASED]
+    ws.format(long_ranges, {"wrapStrategy": "CLIP"})
+
+    # 短い列は内容に合わせて自動調整（長文列の間で分割されている区間ごとに実行）
+    short_indices = sorted(set(range(len(HEADER))) - set(_LONG_TEXT_INDICES_0BASED))
+    start = None
+    for i, idx in enumerate(short_indices):
+        if start is None:
+            start = idx
+        is_last = i == len(short_indices) - 1
+        next_idx = short_indices[i + 1] if not is_last else None
+        if is_last or next_idx != idx + 1:
+            ws.columns_auto_resize(start, idx + 1)
+            start = None
 
 
 class SheetsWriter:
@@ -41,6 +82,10 @@ class SheetsWriter:
 
         if self.worksheet.row_values(1) != HEADER:
             self.worksheet.update(range_name="A1", values=[HEADER])
+            try:
+                _apply_sheet_formatting(self.worksheet)
+            except Exception as exc:
+                logger.warning("マスターシートの書式設定に失敗しました: %s", exc)
 
     def existing_urls(self) -> set[str]:
         url_col_index = HEADER.index("URL") + 1
@@ -101,6 +146,10 @@ class SheetsWriter:
             f"\"select * where Col{_DETECTED_AT_COL_INDEX} like '{date_str}%'\", 1)"
         )
         ws.update(range_name="A1", values=[[formula]], value_input_option="USER_ENTERED")
+        try:
+            _apply_sheet_formatting(ws)
+        except Exception as exc:
+            logger.warning("日別タブ「%s」の書式設定に失敗しました: %s", date_str, exc)
         logger.info("日別タブ「%s」を作成しました（%s列を検出日時として参照）", date_str, detected_at_col)
 
     def append_jobs(
