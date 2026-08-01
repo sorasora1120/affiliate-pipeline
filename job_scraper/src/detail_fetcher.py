@@ -19,12 +19,21 @@ def _parse_coconala(text: str) -> dict:
     info = {"client_name": "不明", "rating": "", "order_count": ""}
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     # 例: ["募集者情報", "my777my", "5.0 （7）", "発注実績", "2", ...]
+    # レビュー0件の依頼者は評価行が丸ごと無いことがあり、位置決め打ちだと
+    # "発注実績"というラベル文字列を評価欄に誤って拾ってしまうバグがあった
+    # （実データで発見: 評価='発注実績' という壊れた値が入っていた）。
+    # ラベルを探して直後の行を読む方式にして、行の有無に影響されないようにする。
     if len(lines) > 1:
         info["client_name"] = lines[1]
-    if len(lines) > 2:
+    if "発注実績" in lines:
+        idx = lines.index("発注実績")
+        if idx + 1 < len(lines):
+            info["order_count"] = lines[idx + 1]
+        # 評価行は名前の直後〜"発注実績"の手前にある想定。存在すれば拾う
+        if idx > 2:
+            info["rating"] = lines[2]
+    elif len(lines) > 2:
         info["rating"] = lines[2]
-    if len(lines) > 4 and lines[3] == "発注実績":
-        info["order_count"] = lines[4]
     return info
 
 
