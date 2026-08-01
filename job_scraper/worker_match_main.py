@@ -3,17 +3,17 @@
 
 実行フロー:
   1. スプレッドシートの「未チェック」案件から、対象カテゴリ・予算あり・
-     除外キーワードなしのものを抜き出す
-  2. 各案件の詳細ページから依頼者（クライアント）情報を取得
-  3. 案件ごとに「自分用の要点／ワーカーへの交渉メッセージ／クライアントへの
+     除外キーワードなしのものを抜き出す（依頼者情報は収集時=main.pyで
+     取得済みのシートの値をそのまま読む。ここではライブ取得しない。
+     CrowdWorksはクラウドから直接アクセスできないため必須の制約）
+  2. 案件ごとに「自分用の要点／ワーカーへの交渉メッセージ／クライアントへの
      提案文下書き」の3点セットをDiscordに通知（1案件=1メッセージ）
-  4. 通知した案件はステータスを「提案済み」に更新し、次回以降は対象外にする
+  3. 通知した案件はステータスを「提案済み」に更新し、次回以降は対象外にする
 """
 import logging
 import sys
 
 import config
-from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import (
@@ -60,17 +60,11 @@ def run() -> None:
         notify_discord("マルツィアさんに提案できる新規案件はありませんでした。")
         return
 
-    try:
-        client_info_map = fetch_client_info([c["url"] for c in candidates])
-    except Exception as exc:
-        logger.warning("依頼者情報の取得に失敗しました: %s", exc)
-        client_info_map = {}
-
     sent = 0
     for c in candidates:
         try:
             ok = (
-                notify_discord(format_info_message(c, client_info_map.get(c["url"])))
+                notify_discord(format_info_message(c))
                 and notify_discord(format_worker_message(c))
                 and notify_discord(format_proposal_message(c))
             )

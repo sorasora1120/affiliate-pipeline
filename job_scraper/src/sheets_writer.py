@@ -12,7 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 HEADER = [
     "ステータス", "プラットフォーム", "タイトル", "カテゴリ", "予算", "締切",
-    "URL", "検出日時", "提案文（下書き）",
+    "URL", "検出日時", "提案文（下書き）", "依頼者名", "評価", "実績件数",
 ]
 
 
@@ -44,11 +44,19 @@ class SheetsWriter:
         status_col = HEADER.index("ステータス") + 1
         self.worksheet.update_cell(row_number, status_col, status)
 
-    def append_jobs(self, jobs: list[JobPosting], proposals: dict[str, str]) -> None:
+    def append_jobs(
+        self,
+        jobs: list[JobPosting],
+        proposals: dict[str, str],
+        client_info: dict[str, dict] | None = None,
+    ) -> None:
         if not jobs:
             return
-        rows = [
-            [
+        client_info = client_info or {}
+        rows = []
+        for job in jobs:
+            info = client_info.get(job.url, {})
+            rows.append([
                 "未チェック",
                 job.platform,
                 job.title,
@@ -58,8 +66,9 @@ class SheetsWriter:
                 job.url,
                 job.detected_at,
                 proposals.get(job.url, ""),
-            ]
-            for job in jobs
-        ]
+                info.get("client_name", ""),
+                info.get("rating", ""),
+                info.get("order_count", ""),
+            ])
         self.worksheet.append_rows(rows, value_input_option="USER_ENTERED")
         logger.info("スプレッドシートに %d 件追加しました", len(rows))

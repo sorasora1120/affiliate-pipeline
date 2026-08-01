@@ -96,6 +96,12 @@ def find_candidates(
             "category": category,
             "title": title,
             "url": r.get("URL"),
+            # 収集時（main.py）にプラットフォームに応じたローカル/クラウド実行元で
+            # 取得済みの依頼者情報。ここではシートの値を読むだけで、ライブ取得はしない
+            # （worker_match.ymlはクラウド実行のため、CrowdWorksへは直接アクセスできない）
+            "client_name": r.get("依頼者名") or "不明",
+            "rating": r.get("評価") or "",
+            "order_count": r.get("実績件数") or "",
         }
 
         if not m:
@@ -131,12 +137,11 @@ def _proposal_and_worker_msg(c: dict) -> tuple[str, str]:
     return proposal, worker_msg
 
 
-def format_info_message(c: dict, client_info: dict | None = None) -> str:
+def format_info_message(c: dict) -> str:
     """自分用の要点（1通目）。"""
-    client_info = client_info or {}
-    client_name = client_info.get("client_name", "不明")
-    rating = client_info.get("rating", "")
-    order_count = client_info.get("order_count", "")
+    client_name = c.get("client_name", "不明")
+    rating = c.get("rating", "")
+    order_count = c.get("order_count", "")
     client_line = f"👤 依頼者: {client_name}"
     if rating:
         client_line += f"（評価{rating}"

@@ -1,7 +1,9 @@
 name: 案件×ワーカー マッチング通知
 
-# ココナラ収集（job_scraper.yml）の後に、未対応案件からワーカーへの
-# 提案候補を抜き出し、依頼者情報を取得したうえでDiscordに通知する。
+# ココナラ/CrowdWorks収集の後に、未対応案件からワーカーへの提案候補を抜き出し、
+# Discordに通知する。依頼者情報は収集時（main.py、プラットフォームごとに正しい
+# 実行元＝ローカル/クラウド）に取得済みのシート値を読むだけで、ここではライブ
+# 取得しない（CrowdWorksはクラウドから直接アクセスできないため）。
 on:
   schedule:
     - cron: "30 0,4,9,13 * * *"
@@ -25,9 +27,6 @@ jobs:
       - name: 依存パッケージをインストール
         working-directory: job_scraper
         run: pip install -r requirements.txt
-
-      - name: Playwright ブラウザをインストール
-        run: playwright install chromium --with-deps
 
       - name: マッチングを実行
         working-directory: job_scraper

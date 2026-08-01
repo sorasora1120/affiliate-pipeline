@@ -6,9 +6,15 @@
   2. スプレッドシートに既にある案件（URL重複）を除外
   3. （ココナラ）新着案件の詳細ページから「この募集内容に似ている仕事」を辿り、
      キーワード検索だけでは拾えなかった関連案件を追加発見
-  4. 新規案件について提案文の下書きを生成
-  5. スプレッドシートに追記
-  6. Discord に新着案件を通知（応募の送信はしない）
+  4. ワーカーマッチング対象カテゴリの新着案件について、依頼者情報を取得
+     （収集を実行している環境＝プラットフォームに対応した実行元でそのまま取得する。
+     CrowdWorksはクラウド共有IPが403で弾かれるため、必ずこのmain.pyがローカルPCで
+     crowdworks向けに動いているときに取得する。cloud側のworker_match.ymlからは
+     絶対にCrowdWorksへアクセスしないこと）
+  5. 新規案件について提案文の下書きを生成
+  6. スプレッドシートに追記（依頼者情報も一緒に保存し、ワーカーマッチング側は
+     ライブ取得せずシートの値を読むだけにする）
+  7. Discord に新着案件を通知（応募の送信はしない）
 """
 import logging
 import sys
@@ -16,6 +22,7 @@ import sys
 import config
 from src.coconala_scraper import CoconalaScraper
 from src.crowdworks_scraper import CrowdWorksScraper
+from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.proposal_generator import generate_proposal
 from src.related_jobs_fetcher import fetch_related_jobs
@@ -86,8 +93,18 @@ def run() -> None:
         notify_discord("新着案件はありませんでした。")
         return
 
+    # ワーカーマッチング対象になりうる案件だけ、依頼者情報を先に取得しておく
+    # （無関係な案件まで毎回詳細ページを開くと時間がかかるため絞り込む）
+    info_targets = [job for job in new_jobs if job.category in config.WORKER_MATCH_CATEGORIES]
+    client_info_map: dict[str, dict] = {}
+    if info_targets:
+        try:
+            client_info_map = fetch_client_info([job.url for job in info_targets])
+        except Exception as exc:
+            logger.warning("依頼者情報の取得に失敗しました: %s", exc)
+
     proposals = {job.url: generate_proposal(job) for job in new_jobs}
-    sheet.append_jobs(new_jobs, proposals)
+    sheet.append_jobs(new_jobs, proposals, client_info_map)
 
     lines = [f"新着案件 {len(new_jobs)}件："]
     for job in new_jobs[:15]:
