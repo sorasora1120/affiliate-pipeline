@@ -18,6 +18,7 @@
 """
 import logging
 import sys
+from collections import Counter
 
 import config
 from src.coconala_scraper import CoconalaScraper
@@ -106,11 +107,16 @@ def run() -> None:
     proposals = {job.url: generate_proposal(job) for job in new_jobs}
     sheet.append_jobs(new_jobs, proposals, client_info_map)
 
-    lines = [f"新着案件 {len(new_jobs)}件："]
-    for job in new_jobs[:15]:
-        lines.append(f"・[{job.platform}] {job.title} ({job.budget_text}) {job.url}")
-    if len(new_jobs) > 15:
-        lines.append(f"...ほか{len(new_jobs) - 15}件はスプレッドシートを確認してください")
+    # 案件タイトルを1件ずつ列挙すると、CrowdWorks検索修正後のように件数が跳ねたとき
+    # （例: 134件）にDiscordが埋め尽くされ、後続のワーカー提案通知が埋もれてしまう。
+    # ここでは件数の要約だけにし、詳細は元々全件入っているスプレッドシート側で見る。
+    platform_counts = Counter(job.platform for job in new_jobs)
+    breakdown = " / ".join(f"{platform}: {count}件" for platform, count in platform_counts.items())
+    lines = [
+        f"新着案件 {len(new_jobs)}件（{breakdown}）",
+        f"うちワーカー提案の対象になりうるカテゴリ: {len(info_targets)}件",
+        "詳細・提案文はスプレッドシートを確認してください。",
+    ]
     notify_discord("\n".join(lines))
 
 
