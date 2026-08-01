@@ -19,6 +19,7 @@
 import logging
 import sys
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 import config
 from src.coconala_scraper import CoconalaScraper
@@ -35,6 +36,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+JST = timezone(timedelta(hours=9))
 
 
 def run() -> None:
@@ -106,6 +108,11 @@ def run() -> None:
 
     proposals = {job.url: generate_proposal(job) for job in new_jobs}
     sheet.append_jobs(new_jobs, proposals, client_info_map)
+
+    try:
+        sheet.ensure_daily_view(datetime.now(JST).strftime("%Y-%m-%d"))
+    except Exception as exc:
+        logger.warning("日別タブの作成に失敗しました: %s", exc)
 
     # 案件タイトルを1件ずつ列挙すると、CrowdWorks検索修正後のように件数が跳ねたとき
     # （例: 134件）にDiscordが埋め尽くされ、後続のワーカー提案通知が埋もれてしまう。

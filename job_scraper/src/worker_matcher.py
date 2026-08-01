@@ -123,7 +123,9 @@ def find_candidates(
     return candidates
 
 
-def _proposal_and_worker_msg(c: dict) -> tuple[str, str]:
+def proposal_and_worker_message(c: dict) -> tuple[str, str]:
+    """(クライアント提案文, ワーカー向けメッセージ) のペアを返す。生のテキストなので
+    Discordのコードブロック整形なしでスプレッドシートにもそのまま書き込める。"""
     if c["amount"] is None:
         proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
         worker_msg = (
@@ -165,11 +167,11 @@ def format_info_message(c: dict) -> str:
 
 def format_worker_message(c: dict) -> str:
     """マルツィアさんへ送るコピペ用メッセージ（2通目）。"""
-    _, worker_msg = _proposal_and_worker_msg(c)
+    _, worker_msg = proposal_and_worker_message(c)
     return f"--- ワーカーへ（コピペ用） ---\n```\n{worker_msg}\n```"
 
 
 def format_proposal_message(c: dict) -> str:
     """クライアントへの提案文の下書き（3通目・要編集）。"""
-    proposal, _ = _proposal_and_worker_msg(c)
+    proposal, _ = proposal_and_worker_message(c)
     return f"--- クライアントへの提案文（下書き・●●部分は要編集） ---\n```\n{proposal}\n```"

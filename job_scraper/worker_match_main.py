@@ -7,7 +7,9 @@
      取得済みのシートの値をそのまま読む。ここではライブ取得しない。
      CrowdWorksはクラウドから直接アクセスできないため必須の制約）
   2. 案件ごとに「自分用の要点／ワーカーへの交渉メッセージ／クライアントへの
-     提案文下書き」の3点セットをDiscordに通知（1案件=1メッセージ）
+     提案文下書き」の3点セットをDiscordに通知（1案件=1メッセージ）し、
+     同じ内容をスプレッドシートの列にも書き込む（Discordが埋もれても
+     シート側で必ず確認できるようにする）
   3. 通知した案件はステータスを「提案済み」に更新し、次回以降は対象外にする
 """
 import logging
@@ -22,6 +24,7 @@ from src.worker_matcher import (
     format_info_message,
     format_proposal_message,
     format_worker_message,
+    proposal_and_worker_message,
 )
 
 logging.basicConfig(
@@ -63,6 +66,14 @@ def run() -> None:
     sent = 0
     for c in candidates:
         try:
+            proposal_text, worker_text = proposal_and_worker_message(c)
+            try:
+                sheet.update_candidate_details(c["row"], c["margin"], c["quote"], worker_text, proposal_text)
+            except Exception as exc:
+                # シート書き込みに失敗してもDiscord通知自体は続行する
+                # （Discordが今のところの一次情報源であることに変わりはないため）
+                logger.warning("シートへの詳細書き込みに失敗しました (row=%s): %s", c.get("row"), exc)
+
             ok = (
                 notify_discord(format_info_message(c))
                 and notify_discord(format_worker_message(c))
