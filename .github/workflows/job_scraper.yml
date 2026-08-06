@@ -8,6 +8,14 @@ on:
     - cron: "0 0,4,9,13 * * *"
   workflow_dispatch:   # 手動実行も可能
 
+# 同時実行を防ぐ。定期実行と手動トリガーが重なると、双方が同じexisting_urls()を
+# 見て同じ新着案件を「新規」と判定し、シートに重複追記してしまうバグが実際に発生した
+# （2026-08-01、重複URL5件を発見）。cancel-in-progressはfalseにして、実行中の
+# ジョブを打ち切らず、次の分はキューで待たせる。
+concurrency:
+  group: job-scraper-collect
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
