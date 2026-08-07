@@ -41,7 +41,15 @@ class CoconalaScraper:
                     logger.info("ココナラ 検索: %s (%s)", keyword, url)
                     try:
                         # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
-                        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                        resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                        if resp is not None and resp.status == 403:
+                            # クラウドの共有IPが一時的にレート制限/ブロックされることがある
+                            # （2026-08-04に実際に全キーワードが403になる事例が発生、その後
+                            # 自然に回復した）。恒久的なブロックか一時的なものか分からないため、
+                            # 1回だけ間を置いて再試行してから通常のフォールバックに委ねる。
+                            logger.warning("403 Forbidden (%s)。10秒待って1回だけ再試行します", keyword)
+                            time.sleep(10)
+                            resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
                         try:
                             page.wait_for_selector("a[href*='/requests/']", timeout=10_000)
                         except Exception:

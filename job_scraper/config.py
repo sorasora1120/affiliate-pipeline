@@ -50,10 +50,17 @@ WORKER_MATCH_CATEGORIES = {
     ).split(",")
     if c.strip()
 }
-# ワーカーが対応不可・対象外と分かっているキーワード（案件タイトルに含まれていたら除外）
+# ワーカーが対応不可・対象外と分かっているキーワード（案件タイトルに含まれていたら除外）。
+# 「カテゴリ」はcategory=keyword（検索語）なので実際の中身とズレることがある
+# （例: 「サイト制作」で検索したのにポスターデザイン案件がヒットした実例あり）。
+# マルツィアさんの専門はサイト制作/EC開発のみで、紙媒体・グラフィック単体の
+# デザイン業務は対応外なので、タイトルにこれらが含まれる場合は除外する。
 WORKER_MATCH_EXCLUDE_KEYWORDS = [
     k.strip()
-    for k in os.getenv("WORKER_MATCH_EXCLUDE_KEYWORDS", "BASE,楽天市場,楽天,保守,運用サポート,営業").split(",")
+    for k in os.getenv(
+        "WORKER_MATCH_EXCLUDE_KEYWORDS",
+        "BASE,楽天市場,楽天,保守,運用サポート,営業,ポスター,チラシ,名刺,バナー,パンフレット,冊子",
+    ).split(",")
     if k.strip()
 ]
 WORKER_MATCH_MIN_BUDGET_YEN = int(os.getenv("WORKER_MATCH_MIN_BUDGET_YEN", "8000"))
