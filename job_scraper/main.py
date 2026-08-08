@@ -121,7 +121,11 @@ def run() -> None:
     breakdown = " / ".join(f"{platform}: {count}件" for platform, count in platform_counts.items())
     lines = [
         f"新着案件 {len(new_jobs)}件（{breakdown}）",
-        f"うちワーカー提案の対象になりうるカテゴリ: {len(info_targets)}件",
+        # ここでのカウントはカテゴリ一致のみの粗い判定（予算下限・除外キーワードは
+        # ワーカーマッチング側で別途チェックする）。「対象になりうる」件数と実際に
+        # 提案される件数がズレることがあるのは仕様で、実際の候補数は次のワーカー
+        # マッチング通知（「マルツィアさんに提案できる新規案件」）を見ること。
+        f"うちカテゴリだけ見て対象になりうる件数: {len(info_targets)}件（予算・除外条件はこの後のワーカーマッチングで判定）",
         "詳細・提案文はスプレッドシートを確認してください。",
     ]
     notify_discord("\n".join(lines))
