@@ -86,7 +86,12 @@ def fetch_client_info(urls: list[str]) -> dict[str, dict]:
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=20_000)
                     page.wait_for_timeout(2_000)
-                    heading = page.get_by_text(heading_text, exact=False).first
+                    # exact=Falseだと、案件説明文に「※クライアント情報は契約後に開示」の
+                    # ような一文が含まれる場合にそちらを見出しと誤認識してしまう
+                    # （実データで発見: 依頼者名に案件説明文が丸ごと入るバグが発生した）。
+                    # 本物の見出し要素はそれ単体でテキストが完結しているため、
+                    # exact=Trueにして本文中の部分一致を除外する。
+                    heading = page.get_by_text(heading_text, exact=True).first
                     text = heading.locator(xpath).inner_text(timeout=5_000)
                     info = parser(text)
                 except Exception as exc:
