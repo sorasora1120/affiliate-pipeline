@@ -42,8 +42,8 @@ jobs:
         working-directory: job_scraper
         env:
           PLATFORMS: coconala
-          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify' }}
-          MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '20' }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作' }}
+          MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '30' }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}

@@ -6,18 +6,22 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # 検索キーワード（カンマ区切りで環境変数から上書き可能）
+# 2026-08-09、案件数を増やすため類義語を追加（コーポレートサイト制作/LP制作/
+# ランディングページ制作/サイトリニューアル/Web制作）。追加したキーワードは
+# WORKER_MATCH_CATEGORIESにも必ず同時追加すること（片方だけだと静かに0件になる）。
 KEYWORDS = [
     k.strip()
     for k in os.getenv(
         "JOB_KEYWORDS",
         "ロゴ,ロゴデザイン,サイト制作,ホームページ制作,ECサイト構築,"
-        "ECサイト制作,ネットショップ構築,ネットショップ,Shopify",
+        "ECサイト制作,ネットショップ構築,ネットショップ,Shopify,"
+        "コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作",
     ).split(",")
     if k.strip()
 ]
 
-# 1キーワードあたりの取得件数上限
-MAX_JOBS_PER_KEYWORD = int(os.getenv("MAX_JOBS_PER_KEYWORD", "20"))
+# 1キーワードあたりの取得件数上限（2026-08-09: 20→30に増量、案件数を増やす要望のため）
+MAX_JOBS_PER_KEYWORD = int(os.getenv("MAX_JOBS_PER_KEYWORD", "30"))
 
 # ページ間の待機秒数（サーバー負荷軽減のため）
 REQUEST_INTERVAL_SECONDS = float(os.getenv("REQUEST_INTERVAL_SECONDS", "3"))
@@ -46,7 +50,8 @@ WORKER_MATCH_CATEGORIES = {
     c.strip()
     for c in os.getenv(
         "WORKER_MATCH_CATEGORIES",
-        "サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify",
+        "サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,"
+        "コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作",
     ).split(",")
     if c.strip()
 }

@@ -24,8 +24,8 @@ RELATED_HEADING = "この募集内容に似ている仕事"
 
 def fetch_related_jobs(
     source_jobs: list[JobPosting],
-    max_source_pages: int = 15,
-    max_related_per_page: int = 6,
+    max_source_pages: int = 25,
+    max_related_per_page: int = 8,
 ) -> list[JobPosting]:
     """新着ココナラ案件のうち先頭max_source_pages件について、詳細ページ下部の
     関連案件セクションを辿り、追加のJobPostingを返す（呼び出し元で重複除去すること）。
