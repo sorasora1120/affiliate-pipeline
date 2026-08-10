@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -7,6 +8,34 @@ from google.oauth2.service_account import Credentials
 from .models import JobPosting
 
 logger = logging.getLogger(__name__)
+
+
+def _retry_on_transient_error(func, attempts: int = 4, base_delay: float = 5.0):
+    """Google Sheets APIの一時的なエラー（5xx系）に対して指数バックオフでリトライする。
+
+    2026-08-10、本番の定期実行（GitHub Actions・ローカル両方）がSheets APIの
+    「503: The service is currently unavailable」だけで丸ごと失敗する事例が実際に
+    発生した（コード側のバグではなくGoogle側の一時的な問題）。特に接続の一番最初の
+    呼び出し（open_by_key）で起きると、それ以降の処理が一切実行されず案件が
+    1件も収集されない/通知されないまま終わってしまうため、ここでリトライを吸収する。
+    """
+    last_exc = None
+    for attempt in range(attempts):
+        try:
+            return func()
+        except gspread.exceptions.APIError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status is not None and 500 <= status < 600 and attempt < attempts - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(
+                    "Sheets APIが一時的にエラー（%s）。%.0f秒待って再試行します（%d/%d）",
+                    status, delay, attempt + 1, attempts,
+                )
+                time.sleep(delay)
+                last_exc = exc
+                continue
+            raise
+    raise last_exc
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -77,15 +106,15 @@ class SheetsWriter:
         info = json.loads(service_account_json)
         creds = Credentials.from_service_account_info(info, scopes=SCOPES)
         client = gspread.authorize(creds)
-        self.spreadsheet = client.open_by_key(sheet_id)
+        self.spreadsheet = _retry_on_transient_error(lambda: client.open_by_key(sheet_id))
 
         try:
-            self.worksheet = self.spreadsheet.worksheet(worksheet_name)
+            self.worksheet = _retry_on_transient_error(lambda: self.spreadsheet.worksheet(worksheet_name))
         except gspread.WorksheetNotFound:
             self.worksheet = self.spreadsheet.add_worksheet(title=worksheet_name, rows=1000, cols=len(HEADER))
             self.worksheet.append_row(HEADER)
 
-        if self.worksheet.row_values(1) != HEADER:
+        if _retry_on_transient_error(lambda: self.worksheet.row_values(1)) != HEADER:
             self.worksheet.update(range_name="A1", values=[HEADER])
             try:
                 _apply_sheet_formatting(self.worksheet)
