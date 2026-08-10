@@ -2,7 +2,8 @@
 スプレッドシートの未対応案件から、条件に合うものを抜き出し、
 1案件ごとに以下3点セットのDiscordメッセージを組み立てる:
   1. 自分用の要点（金額・利益目安・依頼者情報・リンク）
-  2. ワーカー（マルツィアさん等）へそのまま送れる交渉メッセージ
+  2. 外注ワーカーへそのまま送れる交渉メッセージ（特定の個人名を決め打ちしない。
+     2026-08-10、それまでの主要ワーカーが離脱したため汎用文言に変更）
   3. クライアントへ送る提案文の下書き（要編集）
 
 マージンは予算の一定割合（下限〜上限でクランプ）とし、
@@ -129,13 +130,13 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
     if c["amount"] is None:
         proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
         worker_msg = (
-            f'Hi Marzia! New project: {c["title"]}. '
+            f'Hi! New project: {c["title"]}. '
             f"Client hasn't given a fixed budget yet (quote-based). "
             f"Could you tell me roughly how much you'd charge for this, so I can quote the client?"
         )
     else:
         proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
-        worker_msg = f'Hi Marzia! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
+        worker_msg = f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
     return proposal, worker_msg
 
 
@@ -166,7 +167,7 @@ def format_info_message(c: dict) -> str:
 
 
 def format_worker_message(c: dict) -> str:
-    """マルツィアさんへ送るコピペ用メッセージ（2通目）。"""
+    """ワーカーへ送るコピペ用メッセージ（2通目）。"""
     _, worker_msg = proposal_and_worker_message(c)
     return f"--- ワーカーへ（コピペ用） ---\n```\n{worker_msg}\n```"
 

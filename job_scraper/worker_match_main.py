@@ -60,7 +60,7 @@ def run() -> None:
     logger.info("マッチング候補: %d件", len(candidates))
 
     if not candidates:
-        notify_discord("マルツィアさんに提案できる新規案件はありませんでした。")
+        notify_discord("ワーカーに提案できる新規案件はありませんでした。")
         return
 
     sent = 0
