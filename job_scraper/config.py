@@ -80,6 +80,10 @@ WORKER_MATCH_EXCLUDE_KEYWORDS = [
 WORKER_MATCH_MIN_BUDGET_YEN = int(os.getenv("WORKER_MATCH_MIN_BUDGET_YEN", "8000"))
 # マージンは予算の一定割合を、下限〜上限の範囲でスライドさせる
 # （固定額だと小さい案件では割合が大きすぎ、大きい案件では小さすぎるため）
+# 2026-08-10: 上限を1万円→3万円に引き上げ。キーワード拡張後、予算50万〜100万円の
+# 高額案件が増えたが、旧上限だと利益率が1〜2%まで薄まっていた（実データで250件中
+# 68件が上限に張り付いていることを確認）。3万円なら高額案件でもしっかり利益を確保しつつ、
+# ワーカーへの提示額が市場相場から大きくズレない範囲に収まる。
 WORKER_MATCH_MARGIN_PERCENT = float(os.getenv("WORKER_MATCH_MARGIN_PERCENT", "20"))
 WORKER_MATCH_MARGIN_MIN_YEN = int(os.getenv("WORKER_MATCH_MARGIN_MIN_YEN", "3000"))
-WORKER_MATCH_MARGIN_MAX_YEN = int(os.getenv("WORKER_MATCH_MARGIN_MAX_YEN", "10000"))
+WORKER_MATCH_MARGIN_MAX_YEN = int(os.getenv("WORKER_MATCH_MARGIN_MAX_YEN", "30000"))
