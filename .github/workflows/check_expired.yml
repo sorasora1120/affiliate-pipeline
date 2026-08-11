@@ -1,0 +1,47 @@
+name: 募集終了チェック（ココナラ）
+
+# 提案済み案件は、収集から実際にクライアントへ応募するまでの間に他の応募者へ
+# 決まってしまうことが多い（2026-08-11、提案済み358件を全件チェックしたところ
+# 61.5%が既に募集終了だった）。ここではココナラ分のみ実行する
+# （CrowdWorks分はrun_crowdworks.py内で収集直後にローカル実行される）。
+on:
+  schedule:
+    # 収集（0,4,9,13 UTC）の2時間後に実行し、新着マッチング分もチェック対象に含める
+    - cron: "0 2,6,11,15 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: job-scraper-check-expired
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 依存パッケージをインストール
+        working-directory: job_scraper
+        run: pip install -r requirements.txt
+
+      - name: Playwright ブラウザをインストール
+        run: playwright install chromium --with-deps
+
+      - name: 募集終了チェックを実行
+        working-directory: job_scraper
+        env:
+          PLATFORMS: coconala
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+        run: python check_expired_main.py
