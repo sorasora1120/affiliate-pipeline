@@ -27,7 +27,12 @@ def _split_chunks(text: str, max_len: int = _MAX_CHUNK) -> list[str]:
     return chunks
 
 
-_MIN_INTERVAL_SECONDS = 0.6  # Discordのwebhookレート制限（概ね5req/2秒）に余裕を持たせる間隔
+# 2026-08-11: 0.6秒だと実際にはほぼ毎回429（レート制限）を食らい、retry_afterが
+# 概ね1.0秒だったことが分かった（159件×3通=477通を送った際、ログのほぼ全行が
+# 「1/3」の初回リトライで埋まっていた＝素通りできた送信がほぼ無かった）。つまり
+# 0.6秒間隔は実質機能しておらず、毎回「送信失敗→約1秒待って再送」を繰り返す分だけ
+# 総時間が伸びていた。実測のretry_afterに合わせて間隔を広げ、無駄な429往復を減らす。
+_MIN_INTERVAL_SECONDS = 1.1  # Discordのwebhookレート制限に合わせた間隔（実測retry_after≒1.0秒）
 _last_sent_at = 0.0
 
 
