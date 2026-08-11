@@ -19,6 +19,7 @@ import config
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import (
+    BELOW_BUDGET_STATUS,
     PROPOSED_STATUS,
     find_candidates,
     format_info_message,
@@ -48,7 +49,7 @@ def run() -> None:
     )
     rows = sheet.all_records()
 
-    candidates = find_candidates(
+    candidates, below_budget_rows = find_candidates(
         rows,
         target_categories=config.WORKER_MATCH_CATEGORIES,
         excluded_keywords=config.WORKER_MATCH_EXCLUDE_KEYWORDS,
@@ -58,6 +59,20 @@ def run() -> None:
         margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
     )
     logger.info("マッチング候補: %d件", len(candidates))
+
+    if below_budget_rows:
+        # 予算未達の行を放置すると「未チェック」のまま残り、次回以降も毎回
+        # 再評価され続け、ビューアの「確認前」タブにも未処理として出続ける
+        # （2026-08-11発覚）。一括更新してステータスを進め、無限再評価を止める。
+        try:
+            updates = [
+                {"range": f"A{row}", "values": [[BELOW_BUDGET_STATUS]]}
+                for row in below_budget_rows
+            ]
+            sheet.worksheet.batch_update(updates, value_input_option="RAW")
+            logger.info("%d件を「%s」に更新しました（予算未達）", len(below_budget_rows), BELOW_BUDGET_STATUS)
+        except Exception as exc:
+            logger.warning("予算未達行の一括更新に失敗しました: %s", exc)
 
     if not candidates:
         notify_discord("ワーカーに提案できる新規案件はありませんでした。")

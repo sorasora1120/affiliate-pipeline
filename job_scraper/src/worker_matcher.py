@@ -13,6 +13,7 @@
 import re
 
 PROPOSED_STATUS = "提案済み"
+BELOW_BUDGET_STATUS = "対象外（予算未達）"
 
 PROPOSAL_TEMPLATE = """はじめまして。◯◯と申します。
 この度の募集内容「{title}」について、以下のお見積りと進め方でご提案いたします。
@@ -78,8 +79,16 @@ def find_candidates(
     margin_percent: float,
     margin_min_yen: int,
     margin_max_yen: int,
-) -> list[dict]:
+) -> tuple[list[dict], list[int]]:
+    """(マッチング候補一覧, 予算未達で弾いた行番号一覧) を返す。
+
+    予算未達の行はステータスを更新せず「未チェック」のまま返すと、次回以降の
+    実行でも毎回同じ行を再評価し続け、しかもビューアの「確認前」タブに
+    "未処理"として出てき続けてしまう（2026-08-11発覚、142件が該当）。
+    呼び出し側でこの行番号一覧を使ってステータスを更新し、無限再評価を止める。
+    """
     candidates = []
+    below_budget_rows: list[int] = []
     for idx, r in enumerate(rows, start=2):  # 2行目からデータ（1行目はヘッダー）
         category = r.get("カテゴリ")
         if category not in target_categories:
@@ -119,13 +128,15 @@ def find_candidates(
 
         amount = int(highest_amount_text.replace(",", ""))
         if amount < min_budget_yen:
+            below_budget_rows.append(idx)
             continue
         margin = _calc_margin(amount, margin_percent, margin_min_yen, margin_max_yen)
         quote = amount - margin
         if quote <= 0:
+            below_budget_rows.append(idx)
             continue
         candidates.append({**base, "amount": amount, "margin": margin, "quote": quote})
-    return candidates
+    return candidates, below_budget_rows
 
 
 def proposal_and_worker_message(c: dict) -> tuple[str, str]:
