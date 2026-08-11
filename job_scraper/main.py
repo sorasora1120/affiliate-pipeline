@@ -59,7 +59,8 @@ def run() -> None:
     if "crowdworks" in config.PLATFORMS:
         try:
             cw_jobs = CrowdWorksScraper().fetch_jobs(
-                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
+                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS,
+                config.PAGES_PER_KEYWORD,
             )
             all_jobs.extend(cw_jobs)
         except Exception as exc:
@@ -68,7 +69,8 @@ def run() -> None:
     if "coconala" in config.PLATFORMS:
         try:
             coconala_jobs = CoconalaScraper().fetch_jobs(
-                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS
+                config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS,
+                config.PAGES_PER_KEYWORD,
             )
             all_jobs.extend(coconala_jobs)
         except Exception as exc:

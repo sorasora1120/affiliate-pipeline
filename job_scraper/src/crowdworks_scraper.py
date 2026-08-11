@@ -23,14 +23,14 @@ JST = timezone(timedelta(hours=9))
 # 旧パラメータ名は "keyword="だったが、CrowdWorks側の仕様変更で無視されるようになり
 # （フィルタなしの全件検索＝34万件がそのまま返ってきていた）、2026-08-01に実機で
 # 検索ボックスを実際に操作して "search[keywords]=" が正しいパラメータ名だと確認した。
-SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new"
+SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new&page={page}"
 DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
 class CrowdWorksScraper:
     def fetch_jobs(self, keywords: list[str], max_per_keyword: int = 20,
-                    interval_seconds: float = 3.0) -> list[JobPosting]:
+                    interval_seconds: float = 3.0, pages_per_keyword: int = 2) -> list[JobPosting]:
         jobs: list[JobPosting] = []
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
@@ -40,20 +40,29 @@ class CrowdWorksScraper:
             ).new_page()
             try:
                 for keyword in keywords:
-                    url = SEARCH_URL.format(keyword=quote(keyword))
-                    logger.info("CrowdWorks 検索: %s (%s)", keyword, url)
-                    try:
-                        # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
-                        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                    keyword_jobs: list[JobPosting] = []
+                    for page_num in range(1, pages_per_keyword + 1):
+                        url = SEARCH_URL.format(keyword=quote(keyword), page=page_num)
+                        logger.info("CrowdWorks 検索: %s %d/%d ページ (%s)", keyword, page_num, pages_per_keyword, url)
                         try:
-                            page.wait_for_selector("a[href*='/public/jobs/']", timeout=10_000)
-                        except Exception:
-                            pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
-                    except Exception as exc:
-                        logger.warning("ページ読み込み失敗 (%s): %s", keyword, exc)
-                        continue
+                            # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
+                            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                            try:
+                                page.wait_for_selector("a[href*='/public/jobs/']", timeout=10_000)
+                            except Exception:
+                                pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
+                        except Exception as exc:
+                            logger.warning("ページ読み込み失敗 (%s %dページ目): %s", keyword, page_num, exc)
+                            continue
 
-                    keyword_jobs = self._extract_jobs(page, keyword, max_per_keyword)
+                        page_jobs = self._extract_jobs(page, keyword, max_per_keyword)
+                        if not page_jobs:
+                            # 2ページ目以降が0件なのは単に案件数が尽きただけの可能性が高いので、
+                            # 通常の「0件アラート」は1ページ目でのみ発報する
+                            break
+                        keyword_jobs.extend(page_jobs)
+                        time.sleep(interval_seconds)
+
                     jobs.extend(keyword_jobs)
 
                     if not keyword_jobs:
@@ -64,8 +73,6 @@ class CrowdWorksScraper:
                             f"[CrowdWorks] キーワード「{keyword}」で0件でした。"
                             f"ページ構造が変わった可能性があります。\n{html_snippet}"
                         )
-
-                    time.sleep(interval_seconds)
             finally:
                 browser.close()
 

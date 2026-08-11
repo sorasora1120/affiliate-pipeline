@@ -23,6 +23,10 @@ KEYWORDS = [
 # 1キーワードあたりの取得件数上限（2026-08-09: 20→30に増量、案件数を増やす要望のため）
 MAX_JOBS_PER_KEYWORD = int(os.getenv("MAX_JOBS_PER_KEYWORD", "30"))
 
+# 1キーワードあたりの検索結果ページ数（2026-08-11追加: 1ページ目だけだと取りこぼしが多いため。
+# CrowdWorks/ココナラとも実機で&page=2の中身が1ページ目とほぼ重複しないことを確認済み）
+PAGES_PER_KEYWORD = int(os.getenv("PAGES_PER_KEYWORD", "2"))
+
 # ページ間の待機秒数（サーバー負荷軽減のため）
 REQUEST_INTERVAL_SECONDS = float(os.getenv("REQUEST_INTERVAL_SECONDS", "3"))
 

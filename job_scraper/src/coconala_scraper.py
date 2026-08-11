@@ -20,14 +20,14 @@ JST = timezone(timedelta(hours=9))
 # sort=new（新着順）だと緩いキーワード一致でもたまたま直近投稿された無関係案件が
 # 上位に来てしまい、キーワード関連度フィルターで毎回弾かれていた。関連度順（デフォルト）
 # の方が実際に検索語と関係あるものが上位に来るため、こちらを使う。
-SEARCH_URL = "https://coconala.com/requests?keyword={keyword}"
+SEARCH_URL = "https://coconala.com/requests?keyword={keyword}&page={page}"
 DETAIL_URL_RE = re.compile(r"/requests/(\d+)")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
 class CoconalaScraper:
     def fetch_jobs(self, keywords: list[str], max_per_keyword: int = 20,
-                    interval_seconds: float = 3.0) -> list[JobPosting]:
+                    interval_seconds: float = 3.0, pages_per_keyword: int = 2) -> list[JobPosting]:
         jobs: list[JobPosting] = []
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
@@ -37,31 +37,40 @@ class CoconalaScraper:
             ).new_page()
             try:
                 for keyword in keywords:
-                    url = SEARCH_URL.format(keyword=quote(keyword))
-                    logger.info("ココナラ 検索: %s (%s)", keyword, url)
-                    try:
-                        # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
-                        resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                        if resp is not None and resp.status == 403:
-                            # クラウドの共有IPが一時的にレート制限/ブロックされることがある
-                            # （2026-08-04に実際に全キーワードが403になる事例が発生、その後
-                            # 自然に回復した）。恒久的なブロックか一時的なものか分からないため、
-                            # 1回だけ間を置いて再試行してから通常のフォールバックに委ねる。
-                            logger.warning("403 Forbidden (%s)。10秒待って1回だけ再試行します", keyword)
-                            time.sleep(10)
-                            resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                    keyword_jobs: list[JobPosting] = []
+                    for page_num in range(1, pages_per_keyword + 1):
+                        url = SEARCH_URL.format(keyword=quote(keyword), page=page_num)
+                        logger.info("ココナラ 検索: %s %d/%d ページ (%s)", keyword, page_num, pages_per_keyword, url)
                         try:
-                            page.wait_for_selector("a[href*='/requests/']", timeout=10_000)
-                        except Exception:
-                            pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
-                        # 検索結果はJSで非同期に絞り込まれるため、初期表示（全件）が
-                        # 書き換わるまで少し待つ
-                        page.wait_for_timeout(3_000)
-                    except Exception as exc:
-                        logger.warning("ページ読み込み失敗 (%s): %s", keyword, exc)
-                        continue
+                            # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
+                            resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                            if resp is not None and resp.status == 403:
+                                # クラウドの共有IPが一時的にレート制限/ブロックされることがある
+                                # （2026-08-04に実際に全キーワードが403になる事例が発生、その後
+                                # 自然に回復した）。恒久的なブロックか一時的なものか分からないため、
+                                # 1回だけ間を置いて再試行してから通常のフォールバックに委ねる。
+                                logger.warning("403 Forbidden (%s)。10秒待って1回だけ再試行します", keyword)
+                                time.sleep(10)
+                                resp = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                            try:
+                                page.wait_for_selector("a[href*='/requests/']", timeout=10_000)
+                            except Exception:
+                                pass  # 案件が本当に0件の場合もあるので、ここでは失敗にしない
+                            # 検索結果はJSで非同期に絞り込まれるため、初期表示（全件）が
+                            # 書き換わるまで少し待つ
+                            page.wait_for_timeout(3_000)
+                        except Exception as exc:
+                            logger.warning("ページ読み込み失敗 (%s %dページ目): %s", keyword, page_num, exc)
+                            continue
 
-                    keyword_jobs = self._extract_jobs(page, keyword, max_per_keyword)
+                        page_jobs = self._extract_jobs(page, keyword, max_per_keyword)
+                        if not page_jobs:
+                            # 2ページ目以降が0件なのは単に案件数が尽きただけの可能性が高いので、
+                            # 通常の「0件アラート」は1ページ目でのみ発報する
+                            break
+                        keyword_jobs.extend(page_jobs)
+                        time.sleep(interval_seconds)
+
                     jobs.extend(keyword_jobs)
 
                     if not keyword_jobs:
@@ -72,8 +81,6 @@ class CoconalaScraper:
                             f"[ココナラ] キーワード「{keyword}」で0件でした。"
                             f"ページ構造が変わった可能性があります。\n{text_snippet}"
                         )
-
-                    time.sleep(interval_seconds)
             finally:
                 browser.close()
 
