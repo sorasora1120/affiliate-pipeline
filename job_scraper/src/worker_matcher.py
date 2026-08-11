@@ -132,11 +132,15 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
         worker_msg = (
             f'Hi! New project: {c["title"]}. '
             f"Client hasn't given a fixed budget yet (quote-based). "
-            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?"
+            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?\n"
+            f'{c["url"]}'
         )
     else:
         proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
-        worker_msg = f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?'
+        worker_msg = (
+            f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?\n'
+            f'{c["url"]}'
+        )
     return proposal, worker_msg
 
 
