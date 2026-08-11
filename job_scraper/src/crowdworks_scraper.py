@@ -30,6 +30,9 @@ DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
 # 単一値用の正規表現が先頭の下限だけにマッチしてしまい、上限の情報が失われる
 # （2026-08-11発覚。実際に締切バグの調査中、案件の過半数が範囲表記であることに気づいた）。
 BUDGET_RANGE_RE = re.compile(r"[\d,]+\s*円\s*[〜~]\s*[\d,]+\s*円")
+# 「5千円未満」「10万円〜」のような位取り略記。素の[\d,]+\s*円だと数字の直後が
+# 「千」「万」でマッチせず「不明」に落ちてしまう（2026-08-11発覚、ココナラで確認）。
+BUDGET_SHORTHAND_RE = re.compile(r"[\d,]+\s*万\s*円|[\d,]+\s*千\s*円")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
@@ -136,7 +139,7 @@ class CrowdWorksScraper:
             if budget_range_match:
                 budget_text = budget_range_match.group(0)
             else:
-                budget_match = BUDGET_RE.search(surrounding)
+                budget_match = BUDGET_RE.search(surrounding) or BUDGET_SHORTHAND_RE.search(surrounding)
                 budget_text = budget_match.group(0) if budget_match else "不明"
 
             # CrowdWorksの実ページは「あと 2 日」のように数字の前後に半角スペースが

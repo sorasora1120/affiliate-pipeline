@@ -24,6 +24,7 @@ JST = timezone(timedelta(hours=9))
 SEARCH_URL = "https://coconala.com/requests?keyword={keyword}&page={page}"
 DETAIL_URL_RE = re.compile(r"/requests/(\d+)")
 BUDGET_RANGE_RE = re.compile(r"[\d,]+\s*円\s*[〜~]\s*[\d,]+\s*円")
+BUDGET_SHORTHAND_RE = re.compile(r"[\d,]+\s*万\s*円|[\d,]+\s*千\s*円")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
@@ -138,7 +139,7 @@ class CoconalaScraper:
             if budget_range_match:
                 budget_text = budget_range_match.group(0)
             else:
-                budget_match = BUDGET_RE.search(surrounding)
+                budget_match = BUDGET_RE.search(surrounding) or BUDGET_SHORTHAND_RE.search(surrounding)
                 budget_text = budget_match.group(0) if budget_match else "不明"
 
             deadline_match = re.search(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)

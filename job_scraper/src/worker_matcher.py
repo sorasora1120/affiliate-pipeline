@@ -10,7 +10,7 @@
 ワーカーへの提示額は「クライアント予算 − マージン」とする
 （ワーカーには実際の予算より低い額を伝えて交渉の余地を残す）。
 """
-import re
+from .budget_utils import parse_budget_yen
 
 PROPOSED_STATUS = "提案済み"
 BELOW_BUDGET_STATUS = "対象外（予算未達）"
@@ -99,11 +99,10 @@ def find_candidates(
         if any(kw in title for kw in excluded_keywords):
             continue
 
-        # 「30,000円 〜 50,000円」のような範囲表記は、下限だけを見ると本来
-        # min_budget_yenを満たす案件を取りこぼす（2026-08-11発覚）。複数の金額が
-        # 見つかった場合は最後（＝上限）を使う。単一値のときは従来通り1件だけ拾う。
-        amounts_found = re.findall(r"([\d,]+)\s*円", r.get("予算", ""))
-        highest_amount_text = amounts_found[-1] if amounts_found else None
+        # 「30,000円 〜 50,000円」の範囲表記は上限を、「5千円未満」「10万円」の
+        # ような位取り略記も金額として解釈する（budget_utils.parse_budget_yen、
+        # 2026-08-11修正）。
+        parsed_amount = parse_budget_yen(r.get("予算", ""))
         base = {
             "row": idx,
             "platform": r.get("プラットフォーム"),
@@ -118,7 +117,7 @@ def find_candidates(
             "order_count": r.get("実績件数") or "",
         }
 
-        if not highest_amount_text:
+        if parsed_amount is None:
             # 予算未提示（「見積り希望」等）の案件。ココナラの依頼系案件は
             # 金額を出さずクライアントからの見積もり提案を待つものが多く、
             # ここで弾くと本来アプローチすべき案件まで消えてしまう。
@@ -126,7 +125,7 @@ def find_candidates(
             candidates.append({**base, "amount": None, "margin": None, "quote": None})
             continue
 
-        amount = int(highest_amount_text.replace(",", ""))
+        amount = parsed_amount
         if amount < min_budget_yen:
             below_budget_rows.append(idx)
             continue
