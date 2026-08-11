@@ -30,3 +30,13 @@ os.chdir(BASE_DIR)
 
 import runpy
 runpy.run_path(str(BASE_DIR / "main.py"), run_name="__main__")
+
+# 収集した案件は、実際に応募するまでの間に他の応募者へ決まってしまうことが多い
+# （2026-08-11、提案済み358件を全件チェックしたところ61.5%が既に募集終了だった）。
+# 収集のたびに合わせてチェックし、Dispatchビューアの「送れる案件」が常に生きている
+# 案件だけになるようにする。ここが失敗してもCrowdWorks収集タスク自体は
+# 成功扱いのままにしたいため、SystemExitを握りつぶす（収集は既に完了済みのため）。
+try:
+    runpy.run_path(str(BASE_DIR / "check_expired_main.py"), run_name="__main__")
+except SystemExit:
+    pass
