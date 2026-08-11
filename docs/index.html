@@ -1,0 +1,952 @@
+<!doctype html>
+<title>Dispatch — 案件リード</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root {
+  --ink: #211E19;
+  --ink-soft: #55504A;
+  --paper: #EEEBE2;
+  --paper-raised: #FBF9F3;
+  --line: #D8D3C6;
+  --accent: #2F6E63;
+  --accent-soft: #DCEAE6;
+  --accent-ink: #16403A;
+  --red: #A8402F;
+  --red-soft: #F3DFDA;
+  --amber: #9C6B1E;
+  --amber-soft: #F1E4C9;
+  --cw: #3B5BA6;
+  --cw-soft: #DEE6F5;
+  --co: #B15A2E;
+  --co-soft: #F5E2D3;
+  --shadow: 0 1px 2px rgba(33,30,25,0.06), 0 2px 10px rgba(33,30,25,0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EBE7DD;
+    --ink-soft: #A9A296;
+    --paper: #17181A;
+    --paper-raised: #202225;
+    --line: #34363A;
+    --accent: #5FB3A3;
+    --accent-soft: #1B322E;
+    --accent-ink: #B7E8DC;
+    --red: #E08976;
+    --red-soft: #3A211D;
+    --amber: #D9AE63;
+    --amber-soft: #362A15;
+    --cw: #8FA9E6;
+    --cw-soft: #202A42;
+    --co: #E0A472;
+    --co-soft: #3A2A1B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #EBE7DD;
+  --ink-soft: #A9A296;
+  --paper: #17181A;
+  --paper-raised: #202225;
+  --line: #34363A;
+  --accent: #5FB3A3;
+  --accent-soft: #1B322E;
+  --accent-ink: #B7E8DC;
+  --red: #E08976;
+  --red-soft: #3A211D;
+  --amber: #D9AE63;
+  --amber-soft: #362A15;
+  --cw: #8FA9E6;
+  --cw-soft: #202A42;
+  --co: #E0A472;
+  --co-soft: #3A2A1B;
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.35);
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+body { min-height: 100vh; }
+.num { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px 12px;
+}
+.brand {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.brand h1 {
+  margin: 0; font-size: 15px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink);
+}
+.brand .stamp-row { display: flex; align-items: center; gap: 6px; }
+.brand .stamp {
+  font-size: 9px; letter-spacing: 0.08em; color: var(--ink-soft);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 2px 6px; text-transform: uppercase;
+}
+.refresh-btn {
+  font-size: 9px; letter-spacing: 0.05em; color: var(--accent);
+  border: 1px solid var(--accent); background: none; border-radius: 3px;
+  padding: 2px 6px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.searchrow { display: flex; gap: 8px; }
+.searchrow input {
+  flex: 1; min-width: 0;
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 12px; font-size: 15px;
+  color: var(--ink); font-family: inherit;
+}
+.searchrow input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.main-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-top: 10px;
+}
+.main-tab {
+  position: relative;
+  text-align: left;
+  border: 1.5px solid var(--line); background: var(--paper-raised);
+  border-radius: 10px; padding: 9px 10px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.main-tab .mt-title { font-size: 12.5px; font-weight: 800; color: var(--ink); line-height: 1.3; }
+.main-tab .mt-sub { font-size: 10px; color: var(--ink-soft); margin-top: 1px; }
+.main-tab .mt-count {
+  position: absolute; top: 7px; right: 8px;
+  font-size: 11px; font-weight: 800; font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  background: var(--paper); color: var(--ink-soft);
+  border: 1px solid var(--line); border-radius: 999px;
+  min-width: 20px; padding: 1px 6px; text-align: center; line-height: 1.5;
+}
+.main-tab[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent);
+}
+.main-tab[aria-pressed="true"] .mt-title,
+.main-tab[aria-pressed="true"] .mt-sub { color: white; }
+.main-tab[aria-pressed="true"] .mt-count {
+  background: rgba(255,255,255,0.25); color: white; border-color: transparent;
+}
+
+.howto {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--ink-soft);
+  background: var(--accent-soft); border-radius: 8px;
+  padding: 8px 10px; margin: 10px 0 0;
+}
+.howto b { color: var(--accent-ink); font-weight: 700; }
+.howto .arrow { color: var(--ink-soft); opacity: 0.6; }
+
+.filter-row {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+  font-size: 12px; color: var(--ink-soft); flex-wrap: wrap;
+}
+.filter-row select {
+  font-size: 12px; font-weight: 600; color: var(--ink);
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 7px; padding: 5px 7px; font-family: inherit;
+}
+
+main { padding: 12px 12px 48px; max-width: 640px; margin: 0 auto; }
+
+.stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin: 4px 0 14px;
+}
+.stat {
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px;
+}
+.stat .stat-label {
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-soft); margin-bottom: 3px;
+}
+.stat .stat-value { font-size: 18px; font-weight: 800; line-height: 1.1; }
+.stat .stat-value.accent { color: var(--accent-ink); }
+
+.toolbar-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 4px 10px; gap: 8px;
+}
+.count-line { font-size: 12px; color: var(--ink-soft); letter-spacing: 0.02em; }
+.count-line b { color: var(--ink); }
+.sort-select {
+  font-size: 12px; font-weight: 600; color: var(--ink);
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 7px; padding: 5px 8px; font-family: inherit;
+}
+
+.date-heading {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--ink-soft); text-transform: uppercase;
+  padding: 14px 4px 6px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+.date-heading:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+
+.card {
+  position: relative;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  padding-left: 10px;
+  transition: opacity 0.15s;
+}
+.card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+}
+.card[data-platform="CrowdWorks"]::before { background: var(--cw); }
+.card[data-platform="ココナラ"]::before { background: var(--co); }
+.card.is-done { opacity: 0.55; }
+.card.is-done::before { background: var(--ink-soft) !important; }
+.card.is-done .title a { text-decoration: line-through; text-decoration-color: var(--ink-soft); }
+
+.card-body { padding: 12px 14px 12px 6px; }
+.meta-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.badge {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 4px; text-transform: uppercase;
+}
+.badge.cw { background: var(--cw-soft); color: var(--cw); }
+.badge.co { background: var(--co-soft); color: var(--co); }
+.badge.cat { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--line); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.badge.status-pending { background: var(--amber-soft); color: var(--amber); }
+.badge.status-applied { background: var(--amber-soft); color: var(--amber); }
+.badge.status-hired { background: var(--accent-soft); color: var(--accent-ink); }
+.badge.status-ordered { background: var(--ink-soft); color: var(--paper-raised); }
+.badge.deadline { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--line); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.badge.deadline-soon { background: var(--amber-soft); color: var(--amber); border: none; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.badge.deadline-urgent { background: var(--red-soft); color: var(--red); border: none; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.meta-time { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
+
+.title {
+  font-size: 15.5px; font-weight: 700; line-height: 1.45;
+  margin: 0 0 8px; text-wrap: balance;
+}
+.title a { color: var(--ink); text-decoration: none; }
+.title a:focus-visible { outline: 2px solid var(--accent); border-radius: 2px; }
+
+.figures {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  font-size: 13px; margin-bottom: 8px;
+}
+.figures .f-main { font-size: 16px; font-weight: 700; }
+.figures .f-label { font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.04em; text-transform: uppercase; margin-right: 3px; }
+.figures .margin-pos { color: var(--accent-ink); }
+.quote-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700; color: var(--amber);
+  background: var(--amber-soft); border-radius: 6px; padding: 4px 9px;
+  margin-bottom: 8px;
+}
+.hi-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.03em;
+  color: var(--amber); background: var(--amber-soft);
+  border-radius: 4px; padding: 2px 6px; margin-left: 4px;
+}
+.card.is-high::before { background: var(--amber) !important; width: 5px; }
+
+.client-row {
+  font-size: 12.5px; color: var(--ink-soft); margin-bottom: 4px;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.client-row .name { color: var(--ink); font-weight: 600; }
+
+.actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.expand-btn {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border: none; border-radius: 6px;
+  padding: 7px 11px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.expand-btn:active { transform: translateY(1px); }
+.done-btn {
+  font-size: 12px; font-weight: 600; color: var(--ink-soft);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 11px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.done-btn[aria-pressed="true"] {
+  background: var(--ink-soft); border-color: var(--ink-soft); color: var(--paper-raised);
+}
+.done-btn.primary-btn, .hire-btn {
+  font-size: 12px; font-weight: 700; color: white;
+  background: var(--accent); border: 1px solid var(--accent); border-radius: 6px;
+  padding: 7px 11px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.reject-btn {
+  font-size: 12px; font-weight: 600; color: var(--red);
+  background: var(--red-soft); border: none; border-radius: 6px;
+  padding: 7px 11px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+
+.panels { display: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.panels.open { display: block; }
+.panel { margin-bottom: 10px; }
+.panel:last-child { margin-bottom: 0; }
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 5px;
+}
+.panel-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.copy-btn {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.03em;
+  border: 1px solid var(--accent); color: var(--accent); background: none;
+  border-radius: 5px; padding: 4px 9px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.copy-btn.copied { background: var(--accent); color: white; border-color: var(--accent); }
+.panel-text {
+  font-size: 12.5px; line-height: 1.65; white-space: pre-wrap;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 7px;
+  padding: 9px 10px; margin: 0; color: var(--ink);
+  max-height: 220px; overflow-y: auto;
+}
+.panel-text.worker-msg { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
+
+.empty {
+  text-align: center; padding: 60px 20px; color: var(--ink-soft);
+}
+.empty .glyph { font-size: 28px; margin-bottom: 10px; }
+
+footer {
+  text-align: center; font-size: 11px; color: var(--ink-soft);
+  padding: 18px 16px 30px; letter-spacing: 0.02em;
+}
+</style>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>Dispatch — 案件リード</h1>
+    <div class="stamp-row">
+      <span class="stamp" id="genAt">読込中</span>
+      <button class="refresh-btn" id="refreshBtn">更新</button>
+    </div>
+  </div>
+
+  <div class="main-tabs" id="mainTabs">
+    <button class="main-tab" data-tab="proposed" aria-pressed="true">
+      <div class="mt-title">① 送れる案件</div>
+      <div class="mt-sub">クライアントに応募</div>
+      <div class="mt-count" id="count-proposed">0</div>
+    </button>
+    <button class="main-tab" data-tab="applied" aria-pressed="false">
+      <div class="mt-title">② 採用待ち</div>
+      <div class="mt-sub">採用されたらワーカーへ</div>
+      <div class="mt-count" id="count-applied">0</div>
+    </button>
+    <button class="main-tab" data-tab="done" aria-pressed="false">
+      <div class="mt-title">③ 発注済み</div>
+      <div class="mt-sub">対応完了</div>
+      <div class="mt-count" id="count-done">0</div>
+    </button>
+    <button class="main-tab" data-tab="pending" aria-pressed="false">
+      <div class="mt-title">👀 確認前</div>
+      <div class="mt-sub">まだ下書き無し</div>
+      <div class="mt-count" id="count-pending">0</div>
+    </button>
+  </div>
+
+  <div class="howto" id="howto"></div>
+
+  <div class="searchrow" style="margin-top:10px;">
+    <input type="search" id="q" placeholder="タイトル・依頼者で検索" autocomplete="off" />
+  </div>
+
+  <div class="filter-row">
+    <select id="platSelect">
+      <option value="all">全プラットフォーム</option>
+      <option value="CrowdWorks">CrowdWorksのみ</option>
+      <option value="ココナラ">ココナラのみ</option>
+    </select>
+  </div>
+</div>
+
+<main>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar-row">
+    <div class="count-line" id="countLine"></div>
+    <select class="sort-select" id="sortSelect">
+      <option value="new">新着順</option>
+      <option value="margin">利益順</option>
+    </select>
+  </div>
+  <div id="list"><div class="empty"><div class="glyph">⏳</div>読み込み中…</div></div>
+</main>
+
+<footer id="footerNote">読み込み中です…</footer>
+
+<script>
+// ============================================================
+// スプレッドシートからのライブデータ取得
+// ============================================================
+// このページはClaude Artifactではなく、静的ホスティング（GitHub Pages）上の
+// 普通のWebページ。開くたびにGoogleスプレッドシートを直接読みに行くので、
+// 常に最新の状態が見られる（誰かが手動でデータを再生成・再公開する必要がない）。
+// 2026-08-12、「友達が最新の状態を見れない」という指摘を受けてArtifact版から移行。
+//
+// gvizのJSON APIはfetch()だとCORSで弾かれることがあるため、
+// <script>タグでの読み込み（JSONP）で取得する。
+const SHEET_ID = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0";
+const SHEET_NAME = "案件一覧";
+
+const COL = {
+  status: 0, platform: 1, title: 2, category: 3, budget: 4, deadline: 5,
+  url: 6, detectedAt: 7, proposalDraft: 8, clientName: 9, rating: 10,
+  orderCount: 11, margin: 12, quote: 13, workerMsg: 14, proposal: 15, detectedDate: 16,
+};
+
+// job_scraper/config.py のWORKER_MATCH_CATEGORIES / WORKER_MATCH_EXCLUDE_KEYWORDSと
+// 手動で同期させる必要がある（サーバー側の設定をこのページから直接読むことはできないため）。
+// config.pyを変更したら、このリストも忘れずに更新すること。
+const WORKER_MATCH_CATEGORIES = new Set([
+  "サイト制作", "ホームページ制作", "ECサイト構築", "ECサイト制作", "ネットショップ構築",
+  "ネットショップ", "Shopify", "コーポレートサイト制作", "LP制作", "ランディングページ制作",
+  "サイトリニューアル", "Web制作",
+]);
+const WORKER_MATCH_EXCLUDE_KEYWORDS = [
+  "BASE","楽天市場","楽天","保守","運用サポート","運営サポート","営業",
+  "ポスター","チラシ","名刺","バナー","パンフレット","冊子","ショップカード",
+  "動画","イラスト","漫画","マンガ","立ち絵","キャラクターデザイン","楽曲","音楽制作",
+  "撮影","画像加工","データ入力","商品リサーチ",
+  "創業メンバー","COO","ロゴ",
+  "バックオフィス","広告運用","戦略担当",
+  "セミナー","講座","カメラマン",
+  "CFO","資金繰り","管理会計","記事ライター","折衝経験","テレアポ",
+  "プレゼン資料","販促物","自動購入","出品アカウント","記事LP","ライター募集",
+  "新規顧客開拓","カスタマー対応","記帳代行","検索してくれる",
+];
+
+function cellValue(cell) {
+  if (cell === null || cell === undefined) return "";
+  if (cell.f !== undefined && cell.f !== null) return cell.f;
+  if (cell.v === null || cell.v === undefined) return "";
+  return cell.v;
+}
+
+function loadGvizJsonp() {
+  return new Promise((resolve, reject) => {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&_=${Date.now()}`;
+    window.google = window.google || {};
+    window.google.visualization = window.google.visualization || {};
+    window.google.visualization.Query = window.google.visualization.Query || {};
+    const timeoutId = setTimeout(() => reject(new Error("timeout")), 20000);
+    window.google.visualization.Query.setResponse = (data) => {
+      clearTimeout(timeoutId);
+      resolve(data);
+      delete window.google.visualization.Query.setResponse;
+      script.remove();
+    };
+    const script = document.createElement("script");
+    script.src = url;
+    script.onerror = () => { clearTimeout(timeoutId); reject(new Error("script load failed")); };
+    document.body.appendChild(script);
+  });
+}
+
+function isExcluded(title) {
+  return WORKER_MATCH_EXCLUDE_KEYWORDS.some(k => (title || "").includes(k));
+}
+
+function slim(row, statusHint) {
+  return {
+    platform: row[COL.platform],
+    category: row[COL.category],
+    title: row[COL.title],
+    url: row[COL.url],
+    budget: row[COL.budget],
+    deadline: row[COL.deadline],
+    // 「検出日時」はシート上の型がdatetime/文字列で混在しており、gvizは型推定に
+    // 合わないセルをnullで返すことがある（2026-08-12発覚）。常に文字列型の
+    // 「検出日」列（日付のみ・時刻なし）にフォールバックする。
+    detectedAt: row[COL.detectedAt] || row[COL.detectedDate] || "",
+    clientName: row[COL.clientName],
+    rating: row[COL.rating],
+    orderCount: row[COL.orderCount],
+    margin: row[COL.margin],
+    quote: row[COL.quote],
+    workerMsg: row[COL.workerMsg],
+    proposal: row[COL.proposal],
+    status: statusHint,
+  };
+}
+
+function buildData(rows) {
+  let proposed = rows.filter(r => r[COL.status] === "提案済み" && r[COL.workerMsg]);
+  proposed.reverse();
+  proposed = proposed.slice(0, 150).map(r => slim(r, "proposed"));
+
+  let pending = rows.filter(r =>
+    r[COL.status] === "未チェック" &&
+    WORKER_MATCH_CATEGORIES.has(r[COL.category]) &&
+    !isExcluded(r[COL.title])
+  );
+  pending.reverse();
+  pending = pending.slice(0, 60).map(r => slim(r, "pending"));
+
+  return { proposed, pending };
+}
+
+let DATA = { proposed: [], pending: [] };
+
+async function loadData(isManualRefresh) {
+  const genAtEl = document.getElementById("genAt");
+  if (isManualRefresh) genAtEl.textContent = "更新中…";
+  try {
+    const resp = await loadGvizJsonp();
+    const rows = (resp.table.rows || []).map(r => (r.c || []).map(cellValue));
+    DATA = buildData(rows);
+    const now = new Date().toLocaleString("ja-JP", { hour12: false });
+    genAtEl.textContent = "取得 " + now;
+    document.getElementById("footerNote").textContent =
+      "スプレッドシートから直接取得しています（最終取得: " + now + "）。「更新」でいつでも最新化できます。";
+    render();
+  } catch (e) {
+    genAtEl.textContent = "取得失敗";
+    document.getElementById("list").innerHTML =
+      `<div class="empty"><div class="glyph">⚠️</div>データの取得に失敗しました。電波状況を確認して「更新」を押してください。</div>`;
+    console.error(e);
+  }
+}
+
+// ============================================================
+// 以下は表示ロジック（Claude Artifact版と共通）
+// ============================================================
+let state = { tab: "proposed", plat: "all", q: "", sort: "new" };
+
+const SKIP_KEY = "dispatch_skip_urls";
+function loadSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); }
+  catch (e) { return new Set(); }
+}
+function saveSet(key, set) {
+  localStorage.setItem(key, JSON.stringify([...set]));
+}
+let skipSet = loadSet(SKIP_KEY);
+
+// 実際の業務フローは「①クライアントに応募→②採用される→③ワーカーに発注」の順で、
+// 採用される前にワーカーへ発注してしまうと無駄足になる。案件ごとの進行段階（ステージ）
+// で管理する。new(未着手) → applied(応募済み・採用待ち) → hired(採用された・発注準備)
+// → ordered(発注済み・完了) / rejected(不採用・見送り)
+const STAGE_KEY = "dispatch_stage_map";
+function loadStageMap() {
+  try { return JSON.parse(localStorage.getItem(STAGE_KEY) || "{}"); }
+  catch (e) { return {}; }
+}
+function saveStageMap() {
+  localStorage.setItem(STAGE_KEY, JSON.stringify(stageMap));
+}
+let stageMap = loadStageMap();
+function getStage(url) { return stageMap[url] || "new"; }
+function setStage(url, stage) { stageMap[url] = stage; saveStageMap(); }
+
+function esc(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function fmtBudget(item) {
+  if (!item.budget || item.budget === "不明") return "予算不明";
+  return item.budget;
+}
+
+function marginYen(item) {
+  const v = String(item.margin || "").replace(/[^0-9]/g, "");
+  return v ? parseInt(v, 10) : -1;
+}
+
+function figuresHtml(item) {
+  if (item.status === "pending") {
+    return `<div class="figures"><span class="f-label">予算</span><span class="f-main num">${esc(fmtBudget(item))}</span></div>`;
+  }
+  const marginKnown = item.margin && item.margin !== "見積り要相談";
+  if (!marginKnown) {
+    return `<div class="quote-badge">💬 見積り要相談（金額は交渉次第）</div>`;
+  }
+  return `<div class="figures">
+    <span><span class="f-label">予算</span><span class="f-main num">¥${esc(String(item.budget).replace(/[^0-9,]/g,''))}</span></span>
+    <span><span class="f-label">利益目安</span><span class="f-main num margin-pos">+¥${esc(String(item.margin))}</span></span>
+  </div>`;
+}
+
+function clientHtml(item) {
+  if (!item.clientName) return "";
+  let bits = [`<span class="name">${esc(item.clientName)}</span>`];
+  if (item.rating) bits.push(`評価 ${esc(item.rating)}`);
+  if (item.orderCount) bits.push(`実績 ${esc(item.orderCount)}件`);
+  return `<div class="client-row">👤 ${bits.join(" · ")}</div>`;
+}
+
+const HIGH_MARGIN_THRESHOLD = 15000;
+
+function daysUntil(deadlineStr) {
+  if (!deadlineStr || !/^\d{4}-\d{2}-\d{2}$/.test(deadlineStr)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [y, m, d] = deadlineStr.split("-").map(Number);
+  const target = new Date(y, m - 1, d);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+}
+
+function deadlineBadge(item) {
+  const days = daysUntil(item.deadline);
+  if (days === null) return "";
+  let label;
+  if (days < 0) label = "期限切れ";
+  else if (days === 0) label = "本日締切";
+  else label = `残り${days}日`;
+  let cls = "deadline";
+  if (days <= 1) cls = "deadline-urgent";
+  else if (days <= 3) cls = "deadline-soon";
+  return `<span class="badge ${cls}">⏰ ${esc(label)}</span>`;
+}
+
+function cardHtml(item, idx) {
+  const platClass = item.platform === "CrowdWorks" ? "cw" : "co";
+  const isPending = item.status === "pending";
+  const stage = isPending ? null : getStage(item.url);
+  const isHigh = marginYen(item) >= HIGH_MARGIN_THRESHOLD;
+
+  let stageBadge = "";
+  if (stage === "applied") stageBadge = '<span class="badge status-applied">📮 採用待ち</span>';
+  else if (stage === "hired") stageBadge = '<span class="badge status-hired">🎯 採用済み・発注待ち</span>';
+  else if (stage === "ordered") stageBadge = '<span class="badge status-ordered">✓ 発注済み</span>';
+
+  let panels;
+  if (isPending) {
+    panels = `
+    <div class="actions">
+      <button class="done-btn" data-skip-toggle="${idx}">見送る（非表示にする）</button>
+    </div>`;
+  } else if (stage === "applied") {
+    panels = `
+    <div class="actions">
+      <button class="expand-btn" data-toggle="${idx}" data-label="応募文">応募文を見る ▾</button>
+      <button class="hire-btn" data-hired-toggle="${idx}">② 採用された</button>
+      <button class="reject-btn" data-reject-toggle="${idx}">不採用だった</button>
+    </div>
+    <div class="panels" id="panels-${idx}">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">クライアントへ送った応募文</span>
+          <button class="copy-btn" data-copy="proposal-${idx}">コピー</button>
+        </div>
+        <pre class="panel-text" id="proposal-${idx}">${esc(item.proposal)}</pre>
+      </div>
+    </div>`;
+  } else if (stage === "hired") {
+    panels = `
+    <div class="actions">
+      <button class="expand-btn" data-toggle="${idx}" data-label="ワーカー宛メッセージ">ワーカー宛メッセージを閉じる ▴</button>
+      <button class="done-btn primary-btn" data-ordered-toggle="${idx}">③ ワーカーに発注した</button>
+    </div>
+    <div class="panels open" id="panels-${idx}">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">ワーカーへ（発注メッセージ）</span>
+          <button class="copy-btn" data-copy="worker-${idx}">コピー</button>
+        </div>
+        <pre class="panel-text worker-msg" id="worker-${idx}">${esc(item.workerMsg)}</pre>
+      </div>
+    </div>`;
+  } else if (stage === "ordered") {
+    panels = `
+    <div class="actions">
+      <button class="expand-btn" data-toggle="${idx}" data-label="コピペ文">コピペ文を見る ▾</button>
+    </div>
+    <div class="panels" id="panels-${idx}">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">ワーカーへ送った内容</span>
+          <button class="copy-btn" data-copy="worker-${idx}">コピー</button>
+        </div>
+        <pre class="panel-text worker-msg" id="worker-${idx}">${esc(item.workerMsg)}</pre>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">クライアントへ送った応募文</span>
+          <button class="copy-btn" data-copy="proposal-${idx}">コピー</button>
+        </div>
+        <pre class="panel-text" id="proposal-${idx}">${esc(item.proposal)}</pre>
+      </div>
+    </div>`;
+  } else {
+    panels = `
+    <div class="actions">
+      <button class="expand-btn" data-toggle="${idx}" data-label="応募文">応募文を見る ▾</button>
+      <button class="done-btn primary-btn" data-applied-toggle="${idx}">① クライアントに応募した</button>
+    </div>
+    <div class="panels" id="panels-${idx}">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">クライアントへ（応募文・下書き）</span>
+          <button class="copy-btn" data-copy="proposal-${idx}">コピー</button>
+        </div>
+        <pre class="panel-text" id="proposal-${idx}">${esc(item.proposal)}</pre>
+      </div>
+    </div>`;
+  }
+
+  return `<article class="card ${stage === 'ordered' ? 'is-done' : ''} ${isHigh ? 'is-high' : ''}" data-platform="${esc(item.platform)}" data-url="${esc(item.url)}">
+    <div class="card-body">
+      <div class="meta-row">
+        <span class="badge ${platClass}">${esc(item.platform)}</span>
+        <span class="badge cat">${esc(item.category)}</span>
+        ${isPending ? '<span class="badge status-pending">未チェック</span>' : ''}
+        ${stageBadge}
+        ${isHigh ? '<span class="hi-badge">⭐ 高額</span>' : ''}
+        ${deadlineBadge(item)}
+        <span class="meta-time num">${esc(item.detectedAt)}</span>
+      </div>
+      <p class="title"><a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.title)}</a></p>
+      ${figuresHtml(item)}
+      ${clientHtml(item)}
+      ${panels}
+    </div>
+  </article>`;
+}
+
+function renderStats(items, tab) {
+  const total = items.length;
+  const withMargin = items.filter(it => it.margin && it.margin !== "見積り要相談");
+  const sumMargin = withMargin.reduce((s, it) => s + marginYen(it), 0);
+
+  let thirdValue;
+  if (tab === "applied") {
+    const waiting = items.filter(it => getStage(it.url) === "applied").length;
+    const readyToOrder = items.filter(it => getStage(it.url) === "hired").length;
+    thirdValue = `採用待ち ${waiting} / 発注準備中 ${readyToOrder}`;
+  } else {
+    const platCounts = { CrowdWorks: 0, "ココナラ": 0 };
+    items.forEach(it => { if (platCounts[it.platform] !== undefined) platCounts[it.platform]++; });
+    thirdValue = `CW ${platCounts["CrowdWorks"]} / ココ ${platCounts["ココナラ"]}`;
+  }
+
+  document.getElementById("stats").innerHTML = `
+    <div class="stat">
+      <div class="stat-label">件数</div>
+      <div class="stat-value">${total}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">利益目安 合計</div>
+      <div class="stat-value accent num">¥${sumMargin.toLocaleString()}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">内訳</div>
+      <div class="stat-value" style="font-size:12px; font-weight:700; line-height:1.5;">${thirdValue}</div>
+    </div>`;
+}
+
+function dateGroupLabel(detectedAt) {
+  return String(detectedAt || "").slice(0, 10) || "日付不明";
+}
+
+const HOWTO_TEXT = {
+  proposed: `
+    <span><b>①</b>案件をタップ</span>
+    <span class="arrow">→</span>
+    <span><b>②</b>「応募文を見る」で開く</span>
+    <span class="arrow">→</span>
+    <span><b>③</b>コピーしてクラウドワークス/ココナラで応募</span>
+    <span class="arrow">→</span>
+    <span><b>④</b>「クライアントに応募した」を押す</span>`,
+  applied: `
+    <span><b>採用されたら</b>「② 採用された」を押す</span>
+    <span class="arrow">→</span>
+    <span>ワーカー宛メッセージが出る</span>
+    <span class="arrow">→</span>
+    <span>コピーしてワーカーに送る</span>
+    <span class="arrow">→</span>
+    <span>「③ ワーカーに発注した」で完了</span>`,
+};
+
+function updateTabCounts() {
+  let proposedN = 0, appliedN = 0, doneN = 0;
+  (DATA.proposed || []).forEach(it => {
+    const stage = getStage(it.url);
+    if (stage === "new") {
+      const days = daysUntil(it.deadline);
+      if (!(days !== null && days < 0)) proposedN++;
+    } else if (stage === "applied" || stage === "hired") {
+      appliedN++;
+    } else if (stage === "ordered") {
+      doneN++;
+    }
+  });
+  let pendingN = 0;
+  (DATA.pending || []).forEach(it => {
+    if (skipSet.has(it.url)) return;
+    const days = daysUntil(it.deadline);
+    if (!(days !== null && days < 0)) pendingN++;
+  });
+  document.getElementById("count-proposed").textContent = proposedN;
+  document.getElementById("count-applied").textContent = appliedN;
+  document.getElementById("count-done").textContent = doneN;
+  document.getElementById("count-pending").textContent = pendingN;
+}
+
+function render() {
+  updateTabCounts();
+  const items = state.tab === "pending" ? (DATA.pending || []) : (DATA.proposed || []);
+  document.getElementById("howto").innerHTML = HOWTO_TEXT[state.tab] || "";
+  document.getElementById("howto").style.display = HOWTO_TEXT[state.tab] ? "flex" : "none";
+
+  const q = state.q.trim().toLowerCase();
+  const filtered = items.filter(it => {
+    if (state.plat !== "all" && it.platform !== state.plat) return false;
+    if (state.tab === "pending") {
+      if (skipSet.has(it.url)) return false;
+    } else {
+      const stage = getStage(it.url);
+      if (state.tab === "proposed" && stage !== "new") return false;
+      if (state.tab === "applied" && stage !== "applied" && stage !== "hired") return false;
+      if (state.tab === "done" && stage !== "ordered") return false;
+    }
+    if (state.tab === "proposed" || state.tab === "pending") {
+      const days = daysUntil(it.deadline);
+      if (days !== null && days < 0) return false;
+    }
+    if (!q) return true;
+    return String(it.title || "").toLowerCase().includes(q) || String(it.clientName || "").toLowerCase().includes(q);
+  });
+
+  renderStats(filtered, state.tab);
+
+  const sorted = filtered.slice();
+  if (state.sort === "margin") {
+    sorted.sort((a, b) => marginYen(b) - marginYen(a));
+  }
+
+  const list = document.getElementById("list");
+  document.getElementById("countLine").innerHTML = `<b>${filtered.length}</b>件表示中`;
+
+  if (sorted.length === 0) {
+    list.innerHTML = `<div class="empty"><div class="glyph">📭</div>条件に合う案件がありません</div>`;
+    return;
+  }
+
+  if (state.sort === "margin") {
+    list.innerHTML = sorted.map((it, i) => cardHtml(it, i)).join("");
+  } else {
+    let html = "";
+    let lastGroup = null;
+    sorted.forEach((it, i) => {
+      const g = dateGroupLabel(it.detectedAt);
+      if (g !== lastGroup) {
+        html += `<div class="date-heading">${esc(g)}</div>`;
+        lastGroup = g;
+      }
+      html += cardHtml(it, i);
+    });
+    list.innerHTML = html;
+  }
+
+  list.querySelectorAll("[data-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-toggle");
+      const panel = document.getElementById("panels-" + id);
+      const open = panel.classList.toggle("open");
+      const label = btn.getAttribute("data-label") || "コピペ文";
+      btn.textContent = open ? `${label}を閉じる ▴` : `${label}を見る ▾`;
+    });
+  });
+  list.querySelectorAll("[data-copy]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-copy");
+      const el = document.getElementById(id);
+      try {
+        await navigator.clipboard.writeText(el.textContent);
+        btn.textContent = "コピーしました";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = "コピー"; btn.classList.remove("copied"); }, 1600);
+      } catch (e) {
+        btn.textContent = "コピー失敗";
+      }
+    });
+  });
+  list.querySelectorAll("[data-applied-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.closest(".card").getAttribute("data-url");
+      setStage(url, "applied");
+      render();
+    });
+  });
+  list.querySelectorAll("[data-hired-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.closest(".card").getAttribute("data-url");
+      setStage(url, "hired");
+      render();
+    });
+  });
+  list.querySelectorAll("[data-ordered-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.closest(".card").getAttribute("data-url");
+      setStage(url, "ordered");
+      render();
+    });
+  });
+  list.querySelectorAll("[data-reject-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.closest(".card").getAttribute("data-url");
+      setStage(url, "rejected");
+      render();
+    });
+  });
+  list.querySelectorAll("[data-skip-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".card");
+      const url = card.getAttribute("data-url");
+      skipSet.add(url);
+      saveSet(SKIP_KEY, skipSet);
+      render();
+    });
+  });
+}
+
+document.getElementById("mainTabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".main-tab");
+  if (!btn) return;
+  state.tab = btn.dataset.tab;
+  document.querySelectorAll(".main-tab").forEach(b => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+  render();
+});
+
+document.getElementById("q").addEventListener("input", (e) => {
+  state.q = e.target.value;
+  render();
+});
+
+document.getElementById("platSelect").addEventListener("change", (e) => {
+  state.plat = e.target.value;
+  render();
+});
+
+document.getElementById("sortSelect").addEventListener("change", (e) => {
+  state.sort = e.target.value;
+  render();
+});
+
+document.getElementById("refreshBtn").addEventListener("click", () => loadData(true));
+
+loadData(false);
+</script>
