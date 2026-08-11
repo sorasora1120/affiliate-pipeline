@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from playwright.sync_api import sync_playwright
 
+from .deadline_utils import normalize_deadline
 from .models import JobPosting
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,10 @@ class CoconalaScraper:
             budget_text = budget_match.group(0) if budget_match else "不明"
 
             deadline_match = re.search(r"あと\d+日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
-            deadline_text = deadline_match.group(0) if deadline_match else "不明"
+            deadline_text = (
+                normalize_deadline(deadline_match.group(0), datetime.now(JST).date())
+                if deadline_match else "不明"
+            )
 
             results.append(JobPosting(
                 platform="ココナラ",
