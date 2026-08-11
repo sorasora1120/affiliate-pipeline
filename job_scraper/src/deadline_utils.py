@@ -9,7 +9,7 @@
 import re
 from datetime import date, timedelta
 
-_RELATIVE_RE = re.compile(r"あと(\d+)日")
+_RELATIVE_RE = re.compile(r"あと\s*(\d+)\s*日")
 _ABSOLUTE_RE = re.compile(r"(\d{4})[/-](\d{1,2})[/-](\d{1,2})")
 
 

@@ -136,7 +136,7 @@ class CoconalaScraper:
             budget_match = BUDGET_RE.search(surrounding)
             budget_text = budget_match.group(0) if budget_match else "不明"
 
-            deadline_match = re.search(r"あと\d+日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
+            deadline_match = re.search(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
             deadline_text = (
                 normalize_deadline(deadline_match.group(0), datetime.now(JST).date())
                 if deadline_match else "不明"

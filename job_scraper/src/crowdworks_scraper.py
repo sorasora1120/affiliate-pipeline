@@ -131,7 +131,11 @@ class CrowdWorksScraper:
             budget_match = BUDGET_RE.search(surrounding)
             budget_text = budget_match.group(0) if budget_match else "不明"
 
-            deadline_match = re.search(r"あと\d+日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
+            # CrowdWorksの実ページは「あと 2 日」のように数字の前後に半角スペースが
+            # 入る（ココナラは「あと2日」でスペースなし）。これに気づかずスペース
+            # 非対応の正規表現のままだったため、CrowdWorks分の締切抽出が全期間0%だった
+            # （2026-08-11発覚）。\s*で両対応にする。
+            deadline_match = re.search(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
             deadline_text = (
                 normalize_deadline(deadline_match.group(0), datetime.now(JST).date())
                 if deadline_match else "不明"
