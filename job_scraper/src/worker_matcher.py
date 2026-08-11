@@ -90,7 +90,11 @@ def find_candidates(
         if any(kw in title for kw in excluded_keywords):
             continue
 
-        m = re.search(r"([\d,]+)\s*円", r.get("予算", ""))
+        # 「30,000円 〜 50,000円」のような範囲表記は、下限だけを見ると本来
+        # min_budget_yenを満たす案件を取りこぼす（2026-08-11発覚）。複数の金額が
+        # 見つかった場合は最後（＝上限）を使う。単一値のときは従来通り1件だけ拾う。
+        amounts_found = re.findall(r"([\d,]+)\s*円", r.get("予算", ""))
+        highest_amount_text = amounts_found[-1] if amounts_found else None
         base = {
             "row": idx,
             "platform": r.get("プラットフォーム"),
@@ -105,7 +109,7 @@ def find_candidates(
             "order_count": r.get("実績件数") or "",
         }
 
-        if not m:
+        if not highest_amount_text:
             # 予算未提示（「見積り希望」等）の案件。ココナラの依頼系案件は
             # 金額を出さずクライアントからの見積もり提案を待つものが多く、
             # ここで弾くと本来アプローチすべき案件まで消えてしまう。
@@ -113,7 +117,7 @@ def find_candidates(
             candidates.append({**base, "amount": None, "margin": None, "quote": None})
             continue
 
-        amount = int(m.group(1).replace(",", ""))
+        amount = int(highest_amount_text.replace(",", ""))
         if amount < min_budget_yen:
             continue
         margin = _calc_margin(amount, margin_percent, margin_min_yen, margin_max_yen)

@@ -26,6 +26,10 @@ JST = timezone(timedelta(hours=9))
 # 検索ボックスを実際に操作して "search[keywords]=" が正しいパラメータ名だと確認した。
 SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new&page={page}"
 DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
+# 「30,000円 〜 50,000円」のような範囲表記を優先して拾う。範囲を先に試さないと
+# 単一値用の正規表現が先頭の下限だけにマッチしてしまい、上限の情報が失われる
+# （2026-08-11発覚。実際に締切バグの調査中、案件の過半数が範囲表記であることに気づいた）。
+BUDGET_RANGE_RE = re.compile(r"[\d,]+\s*円\s*[〜~]\s*[\d,]+\s*円")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
@@ -128,8 +132,12 @@ class CrowdWorksScraper:
             if keyword not in title and keyword not in surrounding:
                 continue
 
-            budget_match = BUDGET_RE.search(surrounding)
-            budget_text = budget_match.group(0) if budget_match else "不明"
+            budget_range_match = BUDGET_RANGE_RE.search(surrounding)
+            if budget_range_match:
+                budget_text = budget_range_match.group(0)
+            else:
+                budget_match = BUDGET_RE.search(surrounding)
+                budget_text = budget_match.group(0) if budget_match else "不明"
 
             # CrowdWorksの実ページは「あと 2 日」のように数字の前後に半角スペースが
             # 入る（ココナラは「あと2日」でスペースなし）。これに気づかずスペース

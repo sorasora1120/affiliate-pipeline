@@ -23,6 +23,7 @@ JST = timezone(timedelta(hours=9))
 # の方が実際に検索語と関係あるものが上位に来るため、こちらを使う。
 SEARCH_URL = "https://coconala.com/requests?keyword={keyword}&page={page}"
 DETAIL_URL_RE = re.compile(r"/requests/(\d+)")
+BUDGET_RANGE_RE = re.compile(r"[\d,]+\s*円\s*[〜~]\s*[\d,]+\s*円")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
@@ -133,8 +134,12 @@ class CoconalaScraper:
             if len(title) < 3:
                 continue
 
-            budget_match = BUDGET_RE.search(surrounding)
-            budget_text = budget_match.group(0) if budget_match else "不明"
+            budget_range_match = BUDGET_RANGE_RE.search(surrounding)
+            if budget_range_match:
+                budget_text = budget_range_match.group(0)
+            else:
+                budget_match = BUDGET_RE.search(surrounding)
+                budget_text = budget_match.group(0) if budget_match else "不明"
 
             deadline_match = re.search(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}", surrounding)
             deadline_text = (
