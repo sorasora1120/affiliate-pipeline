@@ -40,7 +40,7 @@ jobs:
         working-directory: job_scraper
         env:
           WORKER_MATCH_CATEGORIES: ${{ vars.WORKER_MATCH_CATEGORIES || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作' }}
-          WORKER_MATCH_EXCLUDE_KEYWORDS: ${{ vars.WORKER_MATCH_EXCLUDE_KEYWORDS || 'BASE,楽天市場,楽天,保守,運用サポート,運営サポート,営業,ポスター,チラシ,名刺,バナー,パンフレット,冊子,ショップカード,動画,イラスト,漫画,マンガ,立ち絵,キャラクターデザイン,楽曲,音楽制作,撮影,画像加工,データ入力,商品リサーチ,創業メンバー,COO,ロゴ,バックオフィス,広告運用,戦略担当,セミナー,講座,カメラマン,CFO,資金繰り,管理会計,記事ライター,折衝経験,テレアポ' }}
+          WORKER_MATCH_EXCLUDE_KEYWORDS: ${{ vars.WORKER_MATCH_EXCLUDE_KEYWORDS || 'BASE,楽天市場,楽天,保守,運用サポート,運営サポート,営業,ポスター,チラシ,名刺,バナー,パンフレット,冊子,ショップカード,動画,イラスト,漫画,マンガ,立ち絵,キャラクターデザイン,楽曲,音楽制作,撮影,画像加工,データ入力,商品リサーチ,創業メンバー,COO,ロゴ,バックオフィス,広告運用,戦略担当,セミナー,講座,カメラマン,CFO,資金繰り,管理会計,記事ライター,折衝経験,テレアポ,プレゼン資料,販促物,自動購入,出品アカウント,記事LP,ライター募集,新規顧客開拓,カスタマー対応,記帳代行' }}
           WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '40000' }}
           WORKER_MATCH_MARGIN_PERCENT: ${{ vars.WORKER_MATCH_MARGIN_PERCENT || '20' }}
           WORKER_MATCH_MARGIN_MIN_YEN: ${{ vars.WORKER_MATCH_MARGIN_MIN_YEN || '3000' }}
