@@ -1,0 +1,29 @@
+name: job_scraper ユニットテスト
+
+# 予算・締切のテキスト抽出は正規表現の前提ズレで静かに壊れやすい
+# （2026-08-11、同じ関数系統で3件の実バグが見つかった）。pushのたびに
+# tests/以下の回帰テストを実行し、本番の収集/マッチングを回す前に検知する。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "job_scraper/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: テストを実行
+        working-directory: job_scraper
+        run: python -m unittest discover -s tests -v
