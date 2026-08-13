@@ -430,7 +430,7 @@ const COL = {
 // 共有されない問題があった（友達が「採用された」を押しても自分の画面に出ない等）。
 // デプロイ後にURLをここへ設定する。未設定の間はローカル保存のみで動作する
 // （＝この機能を入れる前の挙動のまま、壊れなく動き続ける）。
-const APPS_SCRIPT_URL = "";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwF0mDtzb1s23EyW6D6cUIpWGGo4f70nEwmLz87jC16kkuNLBGF6m0dmP4EOPGw_vkf4w/exec";
 function syncStageToServer(url, stage) {
   if (!APPS_SCRIPT_URL) return;
   const endpoint = APPS_SCRIPT_URL + "?url=" + encodeURIComponent(url) + "&stage=" + encodeURIComponent(stage);
