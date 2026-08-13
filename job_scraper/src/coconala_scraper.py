@@ -38,6 +38,10 @@ class CoconalaScraper:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
                 locale="ja-JP",
             ).new_page()
+            # crowdworks_scraper.pyと同じ理由（2026-08-13）: 要素取得の待ちが
+            # デフォルト30秒のままだと、サイトが重い時に積み重なって実行時間制限に
+            # 達しうるため短くする。
+            page.set_default_timeout(5_000)
             try:
                 for keyword in keywords:
                     keyword_jobs: list[JobPosting] = []

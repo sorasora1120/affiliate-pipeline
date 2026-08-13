@@ -46,6 +46,12 @@ class CrowdWorksScraper:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
                 locale="ja-JP",
             ).new_page()
+            # Playwrightのデフォルト（30秒）のままだと、1回のsearch結果に含まれる
+            # リンク1つ1つのinner_text()/xpath探索が個別に最大30秒ブロックしうる。
+            # サイト側が一時的に重い時、この待ちが積み重なってタスクスケジューラの
+            # 実行時間制限（30分）に達し丸ごと強制終了される事例が発生した
+            # （2026-08-13発覚、40回中3回）。要素取得は数秒で十分なので短くする。
+            page.set_default_timeout(5_000)
             try:
                 for keyword in keywords:
                     keyword_jobs: list[JobPosting] = []
