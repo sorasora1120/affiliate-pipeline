@@ -22,6 +22,16 @@ BASE_DIR = Path(__file__).parent
 log_path = BASE_DIR / "logs" / "crowdworks.log"
 log_path.parent.mkdir(exist_ok=True)
 
+# ログは追記のみで、ローテーションが無いと無限に肥大化し続ける
+# （タスクスケジューラで1日数回、無期限に実行され続けるため）。2026-08-13、
+# 5MBを超えたら1世代だけ.oldへ退避するシンプルなローテーションを追加した。
+MAX_LOG_BYTES = 5_000_000
+if log_path.exists() and log_path.stat().st_size > MAX_LOG_BYTES:
+    backup_path = log_path.with_suffix(".log.old")
+    if backup_path.exists():
+        backup_path.unlink()
+    log_path.rename(backup_path)
+
 log_file = open(log_path, "a", encoding="utf-8")
 sys.stdout = log_file
 sys.stderr = log_file
