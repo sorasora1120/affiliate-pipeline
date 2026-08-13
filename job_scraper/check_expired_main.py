@@ -33,6 +33,19 @@ def _platform_key(name: str) -> str:
     return "crowdworks" if name == "CrowdWorks" else "coconala"
 
 
+def _is_won_deal(row: dict) -> bool:
+    """採用された（hired）／発注済み（ordered）の案件かどうか。
+
+    シートの「ステータス」列は提案済み時点のまま一生変わらず、実際の進行状況は
+    別列の「進捗ステージ」で管理している。募集終了チェックは「ステータス=提案済み」
+    の行を丸ごと対象にするため、何も考えずに実装すると「クライアントに採用されて
+    募集が締め切られた（＝良いこと）」場合まで「募集終了」と誤判定してシートから
+    削除してしまう（2026-08-13発覚、実削除に変更した直後に気づいた）。
+    採用済み・発注済みの案件は絶対に自動削除／鮮度切れ扱いの対象から除外する。
+    """
+    return row.get("進捗ステージ") in ("hired", "ordered")
+
+
 def run() -> None:
     logger.info("=== 募集終了チェック 開始 ===")
 
@@ -51,6 +64,7 @@ def run() -> None:
         for i, r in enumerate(rows, start=2)
         if r.get("ステータス") == "提案済み"
         and _platform_key(r.get("プラットフォーム", "")) in config.PLATFORMS
+        and not _is_won_deal(r)
     ]
     logger.info("チェック対象: %d件（対象プラットフォーム: %s）", len(url_rows), ", ".join(sorted(config.PLATFORMS)))
 
@@ -66,7 +80,11 @@ def run() -> None:
     # 定期実行に組み込んで自動化した。closed_rowsで既に対象になった行は除く。
     # ステータスの更新は行番号ベースなので、後で行うclosed_rowsの実削除より
     # 先に済ませる（削除すると行番号がズレるため）。
-    stale_rows = [r for r in find_stale_rows(rows, config.PLATFORMS) if r not in set(closed_rows)]
+    row_by_number = {i: r for i, r in enumerate(rows, start=2)}
+    stale_rows = [
+        r for r in find_stale_rows(rows, config.PLATFORMS)
+        if r not in set(closed_rows) and not _is_won_deal(row_by_number.get(r, {}))
+    ]
     logger.info("鮮度切れ（検出から3日超）: %d件", len(stale_rows))
     if stale_rows:
         updates = [{"range": f"A{row}", "values": [[STALE_STATUS]]} for row in stale_rows]
