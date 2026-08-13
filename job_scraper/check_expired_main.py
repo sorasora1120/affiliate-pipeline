@@ -15,7 +15,7 @@ import logging
 import sys
 
 import config
-from src.expiry_checker import CLOSED_STATUS, find_closed_rows
+from src.expiry_checker import CLOSED_STATUS, STALE_STATUS, find_closed_rows, find_stale_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 
@@ -66,6 +66,16 @@ def run() -> None:
             f"募集終了チェック: {len(closed_rows)}/{len(url_rows)}件が募集終了だったため"
             f"「{CLOSED_STATUS}」に更新しました。"
         )
+
+    # 2026-08-12、「古いやつ消して全部新しい物件にしろ」という指示を受けて手動で
+    # 実施した「検出から3日以上経った提案済みを鮮度切れとして除外する」処理を
+    # 定期実行に組み込んで自動化した。closed_rowsで既に更新した行は対象から除く。
+    stale_rows = [r for r in find_stale_rows(rows, config.PLATFORMS) if r not in set(closed_rows)]
+    logger.info("鮮度切れ（検出から3日超）: %d件", len(stale_rows))
+    if stale_rows:
+        updates = [{"range": f"A{row}", "values": [[STALE_STATUS]]} for row in stale_rows]
+        sheet.worksheet.batch_update(updates, value_input_option="RAW")
+        notify_discord(f"鮮度切れチェック: {len(stale_rows)}件を「{STALE_STATUS}」に更新しました。")
 
 
 if __name__ == "__main__":
