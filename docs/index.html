@@ -315,6 +315,14 @@ main { padding: 12px 12px 48px; max-width: 640px; margin: 0 auto; }
   -webkit-tap-highlight-color: transparent;
 }
 .copy-btn.copied { background: var(--accent); color: white; border-color: var(--accent); }
+.copy-apply-btn {
+  display: block; width: 100%;
+  font-size: 13px; font-weight: 700; color: white;
+  background: var(--accent); border: none; border-radius: 6px;
+  padding: 10px 14px; margin-top: 8px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.copy-apply-btn:active { transform: translateY(1px); }
 .panel-text {
   font-size: 12.5px; line-height: 1.65; white-space: pre-wrap;
   background: var(--paper); border: 1px solid var(--line); border-radius: 7px;
@@ -650,17 +658,13 @@ function cardHtml(item, idx) {
     </div>`;
   } else if (stage === "hired") {
     panels = `
-    <div class="actions">
-      <button class="expand-btn" data-toggle="${idx}" data-label="ワーカー宛メッセージ">ワーカー宛メッセージを閉じる ▴</button>
-      <button class="done-btn primary-btn" data-ordered-toggle="${idx}">③ ワーカーに発注した</button>
-    </div>
     <div class="panels open" id="panels-${idx}">
       <div class="panel">
         <div class="panel-head">
           <span class="panel-label">ワーカーへ（発注メッセージ）</span>
-          <button class="copy-btn" data-copy="worker-${idx}">コピー</button>
         </div>
         <pre class="panel-text worker-msg" id="worker-${idx}">${esc(item.workerMsg)}</pre>
+        <button class="copy-apply-btn" data-copy-and-order="${idx}">③ コピーして発注済みにする</button>
       </div>
     </div>`;
   } else if (stage === "ordered") {
@@ -688,15 +692,14 @@ function cardHtml(item, idx) {
     panels = `
     <div class="actions">
       <button class="expand-btn" data-toggle="${idx}" data-label="応募文">応募文を見る ▾</button>
-      <button class="done-btn primary-btn" data-applied-toggle="${idx}">① クライアントに応募した</button>
     </div>
     <div class="panels" id="panels-${idx}">
       <div class="panel">
         <div class="panel-head">
           <span class="panel-label">クライアントへ（応募文・下書き）</span>
-          <button class="copy-btn" data-copy="proposal-${idx}">コピー</button>
         </div>
         <pre class="panel-text" id="proposal-${idx}">${esc(item.proposal)}</pre>
+        <button class="copy-apply-btn" data-copy-and-apply="${idx}">① コピーして応募済みにする</button>
       </div>
     </div>`;
   }
@@ -757,21 +760,17 @@ function dateGroupLabel(detectedAt) {
 
 const HOWTO_TEXT = {
   proposed: `
-    <span><b>①</b>案件をタップ</span>
+    <span><b>①</b>「応募文を見る」で開く</span>
     <span class="arrow">→</span>
-    <span><b>②</b>「応募文を見る」で開く</span>
+    <span><b>②</b>緑ボタンでコピー＆応募済みにする</span>
     <span class="arrow">→</span>
-    <span><b>③</b>コピーしてクラウドワークス/ココナラで応募</span>
-    <span class="arrow">→</span>
-    <span><b>④</b>「クライアントに応募した」を押す</span>`,
+    <span>クラウドワークス/ココナラに貼って応募</span>`,
   applied: `
     <span><b>採用されたら</b>「② 採用された」を押す</span>
     <span class="arrow">→</span>
-    <span>ワーカー宛メッセージが出る</span>
+    <span>緑ボタンでコピー＆発注済みにする</span>
     <span class="arrow">→</span>
-    <span>コピーしてワーカーに送る</span>
-    <span class="arrow">→</span>
-    <span>「③ ワーカーに発注した」で完了</span>`,
+    <span>ワーカーに貼って送るだけ</span>`,
 };
 
 function updateTabCounts() {
@@ -878,8 +877,14 @@ function render() {
       }
     });
   });
-  list.querySelectorAll("[data-applied-toggle]").forEach(btn => {
-    btn.addEventListener("click", () => {
+  // 「コピー」と「①応募した/③発注した」を別々のタップにしていたが、実際には
+  // ほぼ必ずセットで行う操作なので1ボタンに統合した（2026-08-13、「もっと簡単に」
+  // という要望を受けて）。コピーしてからステージを進める。
+  list.querySelectorAll("[data-copy-and-apply]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-copy-and-apply");
+      const el = document.getElementById("proposal-" + id);
+      try { await navigator.clipboard.writeText(el.textContent); } catch (e) {}
       const url = btn.closest(".card").getAttribute("data-url");
       setStage(url, "applied");
       render();
@@ -892,8 +897,11 @@ function render() {
       render();
     });
   });
-  list.querySelectorAll("[data-ordered-toggle]").forEach(btn => {
-    btn.addEventListener("click", () => {
+  list.querySelectorAll("[data-copy-and-order]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-copy-and-order");
+      const el = document.getElementById("worker-" + id);
+      try { await navigator.clipboard.writeText(el.textContent); } catch (e) {}
       const url = btn.closest(".card").getAttribute("data-url");
       setStage(url, "ordered");
       render();
