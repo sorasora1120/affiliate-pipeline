@@ -34,16 +34,25 @@ def _platform_key(name: str) -> str:
 
 
 def _is_won_deal(row: dict) -> bool:
-    """採用された（hired）／発注済み（ordered）の案件かどうか。
+    """採用された（hired）／発注済み（ordered）の案件かどうか。鮮度切れタグ付けからも除外する
+    （タグ付けは削除ではないので安全側だが、進行中の案件に誤ったラベルを付けたくない）。"""
+    return row.get("進捗ステージ") in ("hired", "ordered")
+
+
+def _is_protected_from_deletion(row: dict) -> bool:
+    """自動削除（シートから完全に消す）の対象から外すべき案件かどうか。
 
     シートの「ステータス」列は提案済み時点のまま一生変わらず、実際の進行状況は
     別列の「進捗ステージ」で管理している。募集終了チェックは「ステータス=提案済み」
     の行を丸ごと対象にするため、何も考えずに実装すると「クライアントに採用されて
     募集が締め切られた（＝良いこと）」場合まで「募集終了」と誤判定してシートから
     削除してしまう（2026-08-13発覚、実削除に変更した直後に気づいた）。
-    採用済み・発注済みの案件は絶対に自動削除／鮮度切れ扱いの対象から除外する。
+    「応募済み（採用連絡待ち）」の段階も、募集終了だけでは「落選した」のか
+    「採用されたがまだアプリ上で②を押していないだけ」なのか区別できないため、
+    同じ理由で削除対象から外す（タグ付け止まりの鮮度切れチェックとは違い、
+    削除は取り返しがつかないため安全側に倒す）。
     """
-    return row.get("進捗ステージ") in ("hired", "ordered")
+    return row.get("進捗ステージ") in ("applied", "hired", "ordered")
 
 
 def run() -> None:
@@ -64,7 +73,7 @@ def run() -> None:
         for i, r in enumerate(rows, start=2)
         if r.get("ステータス") == "提案済み"
         and _platform_key(r.get("プラットフォーム", "")) in config.PLATFORMS
-        and not _is_won_deal(r)
+        and not _is_protected_from_deletion(r)
     ]
     logger.info("チェック対象: %d件（対象プラットフォーム: %s）", len(url_rows), ", ".join(sorted(config.PLATFORMS)))
 
