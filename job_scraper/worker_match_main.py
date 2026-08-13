@@ -20,6 +20,7 @@ from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import (
     BELOW_BUDGET_STATUS,
+    EXCLUDED_KEYWORD_STATUS,
     PROPOSED_STATUS,
     find_candidates,
     format_info_message,
@@ -49,7 +50,7 @@ def run() -> None:
     )
     rows = sheet.all_records()
 
-    candidates, below_budget_rows = find_candidates(
+    candidates, below_budget_rows, excluded_keyword_rows = find_candidates(
         rows,
         target_categories=config.WORKER_MATCH_CATEGORIES,
         excluded_keywords=config.WORKER_MATCH_EXCLUDE_KEYWORDS,
@@ -73,6 +74,23 @@ def run() -> None:
             logger.info("%d件を「%s」に更新しました（予算未達）", len(below_budget_rows), BELOW_BUDGET_STATUS)
         except Exception as exc:
             logger.warning("予算未達行の一括更新に失敗しました: %s", exc)
+
+    if excluded_keyword_rows:
+        # 予算未達と同じ穴が除外キーワード側にもあった（2026-08-13発覚）。
+        # 放置すると「未チェック」のまま無期限に滞留し続ける。
+        try:
+            updates = [
+                {"range": f"A{row}", "values": [[EXCLUDED_KEYWORD_STATUS]]}
+                for row in excluded_keyword_rows
+            ]
+            sheet.worksheet.batch_update(updates, value_input_option="RAW")
+            logger.info(
+                "%d件を「%s」に更新しました（除外キーワード）",
+                len(excluded_keyword_rows),
+                EXCLUDED_KEYWORD_STATUS,
+            )
+        except Exception as exc:
+            logger.warning("除外キーワード行の一括更新に失敗しました: %s", exc)
 
     if not candidates:
         notify_discord("ワーカーに提案できる新規案件はありませんでした。")

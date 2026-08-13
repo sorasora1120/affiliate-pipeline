@@ -14,6 +14,7 @@ from .budget_utils import parse_budget_yen
 
 PROPOSED_STATUS = "提案済み"
 BELOW_BUDGET_STATUS = "対象外（予算未達）"
+EXCLUDED_KEYWORD_STATUS = "対象外（除外キーワード）"
 
 PROPOSAL_TEMPLATE = """はじめまして。Web制作のご依頼を承っております、ソラと申します。
 この度の募集内容「{title}」を拝見し、ぜひお力になれればと思いご提案いたします。
@@ -87,16 +88,19 @@ def find_candidates(
     margin_percent: float,
     margin_min_yen: int,
     margin_max_yen: int,
-) -> tuple[list[dict], list[int]]:
-    """(マッチング候補一覧, 予算未達で弾いた行番号一覧) を返す。
+) -> tuple[list[dict], list[int], list[int]]:
+    """(マッチング候補一覧, 予算未達で弾いた行番号一覧, 除外キーワードで弾いた行番号一覧) を返す。
 
-    予算未達の行はステータスを更新せず「未チェック」のまま返すと、次回以降の
-    実行でも毎回同じ行を再評価し続け、しかもビューアの「確認前」タブに
-    "未処理"として出てき続けてしまう（2026-08-11発覚、142件が該当）。
+    予算未達／除外キーワードの行はステータスを更新せず「未チェック」のまま返すと、
+    次回以降の実行でも毎回同じ行を再評価し続け、しかもビューアの「確認前」タブに
+    "未処理"として出てき続けてしまう（予算未達は2026-08-11発覚・142件が該当して修正済み。
+    除外キーワード側も同じ穴が残ったままだったと2026-08-13に発覚、CrowdWorks分だけで
+    7/19付など3週間以上前のものを含め131件が未チェックのまま滞留していた）。
     呼び出し側でこの行番号一覧を使ってステータスを更新し、無限再評価を止める。
     """
     candidates = []
     below_budget_rows: list[int] = []
+    excluded_keyword_rows: list[int] = []
     for idx, r in enumerate(rows, start=2):  # 2行目からデータ（1行目はヘッダー）
         category = r.get("カテゴリ")
         if category not in target_categories:
@@ -105,6 +109,7 @@ def find_candidates(
             continue
         title = r.get("タイトル", "")
         if any(kw in title for kw in excluded_keywords):
+            excluded_keyword_rows.append(idx)
             continue
 
         # 「30,000円 〜 50,000円」の範囲表記は上限を、「5千円未満」「10万円」の
@@ -143,7 +148,7 @@ def find_candidates(
             below_budget_rows.append(idx)
             continue
         candidates.append({**base, "amount": amount, "margin": margin, "quote": quote})
-    return candidates, below_budget_rows
+    return candidates, below_budget_rows, excluded_keyword_rows
 
 
 def proposal_and_worker_message(c: dict) -> tuple[str, str]:
