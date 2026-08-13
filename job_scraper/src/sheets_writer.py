@@ -133,6 +133,31 @@ class SheetsWriter:
         status_col = HEADER.index("ステータス") + 1
         self.worksheet.update_cell(row_number, status_col, status)
 
+    def delete_rows(self, row_numbers: list[int]) -> None:
+        """複数行をシートから削除する。1行ずつdelete_rows()を呼ぶとAPI呼び出し数が
+        行数分になり、まとまった件数（200件超など）だとSheets APIの書き込みレート
+        制限（429 Quota exceeded、実測: 1分あたり60リクエスト前後）に引っかかる
+        （2026-08-13発覚）。1回のbatch_updateにdeleteDimensionリクエストをまとめて
+        送ることで呼び出し回数を1回にする。行番号は必ず降順で並べる（1つのbatch内でも
+        リクエストは順番に適用されるため、昇順だと1行消すたびに後続の行番号がズレて
+        別の行を消してしまう）。"""
+        sheet_id = self.worksheet.id
+        requests = [
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "dimension": "ROWS",
+                        "startIndex": row - 1,
+                        "endIndex": row,
+                    }
+                }
+            }
+            for row in sorted(set(row_numbers), reverse=True)
+        ]
+        if requests:
+            self.worksheet.spreadsheet.batch_update({"requests": requests})
+
     def update_candidate_details(
         self,
         row_number: int,
