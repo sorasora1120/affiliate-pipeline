@@ -421,7 +421,23 @@ const COL = {
   status: 0, platform: 1, title: 2, category: 3, budget: 4, deadline: 5,
   url: 6, detectedAt: 7, proposalDraft: 8, clientName: 9, rating: 10,
   orderCount: 11, margin: 12, quote: 13, workerMsg: 14, proposal: 15, detectedDate: 16,
+  stage: 17,
 };
+
+// 進行状況（②採用待ち等）をスプレッドシートの「進捗ステージ」列に書き込むための
+// Google Apps Script Web AppのURL（2026-08-13追加）。それまでは各自のブラウザの
+// localStorageだけに保存していたため、複数人でこのページを使うと進行状況が
+// 共有されない問題があった（友達が「採用された」を押しても自分の画面に出ない等）。
+// デプロイ後にURLをここへ設定する。未設定の間はローカル保存のみで動作する
+// （＝この機能を入れる前の挙動のまま、壊れなく動き続ける）。
+const APPS_SCRIPT_URL = "";
+function syncStageToServer(url, stage) {
+  if (!APPS_SCRIPT_URL) return;
+  const endpoint = APPS_SCRIPT_URL + "?url=" + encodeURIComponent(url) + "&stage=" + encodeURIComponent(stage);
+  // no-corsで送りっぱなしにする（このページ単体では応答を読む必要がなく、
+  // Apps Script特有のCORSプリフライトの相性問題も避けられるため）。
+  fetch(endpoint, { mode: "no-cors" }).catch(() => {});
+}
 
 // job_scraper/config.py のWORKER_MATCH_CATEGORIES / WORKER_MATCH_EXCLUDE_KEYWORDSと
 // 手動で同期させる必要がある（サーバー側の設定をこのページから直接読むことはできないため）。
@@ -491,6 +507,7 @@ function slim(row, statusHint) {
     workerMsg: row[COL.workerMsg],
     proposal: row[COL.proposal],
     status: statusHint,
+    stage: row[COL.stage] || "",
   };
 }
 
@@ -519,6 +536,7 @@ async function loadData(isManualRefresh) {
     const resp = await loadGvizJsonp();
     const rows = (resp.table.rows || []).map(r => (r.c || []).map(cellValue));
     DATA = buildData(rows);
+    mergeServerStages();
     const now = new Date().toLocaleString("ja-JP", { hour12: false });
     genAtEl.textContent = "取得 " + now;
     document.getElementById("footerNote").textContent =
@@ -561,7 +579,21 @@ function saveStageMap() {
 }
 let stageMap = loadStageMap();
 function getStage(url) { return stageMap[url] || "new"; }
-function setStage(url, stage) { stageMap[url] = stage; saveStageMap(); }
+function setStage(url, stage) { stageMap[url] = stage; saveStageMap(); syncStageToServer(url, stage); }
+
+// スプレッドシート側の「進捗ステージ」列（他の人がつけた進行状況を含む）を
+// ローカルのstageMapへ取り込む。サーバー側に値がある項目はそちらを優先する
+// （複数人で使う場合、他の人の操作を自分の画面にも反映するため）。
+function mergeServerStages() {
+  let changed = false;
+  (DATA.proposed || []).forEach(it => {
+    if (it.stage && stageMap[it.url] !== it.stage) {
+      stageMap[it.url] = it.stage;
+      changed = true;
+    }
+  });
+  if (changed) saveStageMap();
+}
 
 function esc(s) {
   if (s === null || s === undefined) return "";
