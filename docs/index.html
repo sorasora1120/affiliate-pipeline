@@ -584,12 +584,23 @@ function setStage(url, stage) { stageMap[url] = stage; saveStageMap(); syncStage
 // スプレッドシート側の「進捗ステージ」列（他の人がつけた進行状況を含む）を
 // ローカルのstageMapへ取り込む。サーバー側に値がある項目はそちらを優先する
 // （複数人で使う場合、他の人の操作を自分の画面にも反映するため）。
+//
+// 逆に、サーバー側がまだ空欄なのにローカルには進捗がある項目（この同期機能を
+// 入れる前から、このブラウザだけで「採用された」等にしていた案件）は、
+// サーバー側へ書き戻す。これをしないと、募集終了チェック（採用済み・発注済みの
+// 案件は自動削除の対象から除外する仕組み、2026-08-13追加）が「まだサーバーに
+// 進捗が同期されていない古い案件」を守れず、削除してしまう恐れがあるため。
 function mergeServerStages() {
   let changed = false;
   (DATA.proposed || []).forEach(it => {
     if (it.stage && stageMap[it.url] !== it.stage) {
       stageMap[it.url] = it.stage;
       changed = true;
+    } else if (!it.stage) {
+      const local = stageMap[it.url];
+      if (local && local !== "new") {
+        syncStageToServer(it.url, local);
+      }
     }
   });
   if (changed) saveStageMap();
