@@ -14,12 +14,10 @@ CrowdWorksはクラウド共有IPから拒否される（robots.txtでClaudeBot�
 ココナラのみで良ければ PLATFORMS=coconala でクラウド（GitHub Actions）からも実行可能。
 """
 import logging
-import os
 import sys
-import time
-from pathlib import Path
 
 import config
+from src import sheet_lock
 from src.expiry_checker import STALE_STATUS, find_closed_rows, find_stale_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
@@ -30,35 +28,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
-
-# CrowdWorksの定期実行（run_crowdworks.py）はcheck_expired_main.pyを毎回
-# 自動で連鎖実行する。これと手動実行・他のPLATFORMS指定での実行がたまたま
-# 重なると、どちらも実行開始時点の古い行番号のままシート削除を試みて、
-# 片方が先に削除した分だけ行番号がズレて「存在しない行を削除しようとした」
-# エラーで落ちる（2026-08-14発覚、実際にこれで削除が丸ごと失敗した）。
-# シンプルなロックファイルで多重実行を防ぐ。
-_LOCK_PATH = Path(__file__).parent / "logs" / "check_expired.lock"
-_LOCK_STALE_SECONDS = 20 * 60  # このチェックが20分以上かかることは通常ない
-
-
-def _acquire_lock() -> bool:
-    _LOCK_PATH.parent.mkdir(exist_ok=True)
-    if _LOCK_PATH.exists():
-        age = time.time() - _LOCK_PATH.stat().st_mtime
-        if age < _LOCK_STALE_SECONDS:
-            return False
-        logger.warning("古いロックファイルを検出したため破棄します（%.0f秒前）", age)
-        _LOCK_PATH.unlink(missing_ok=True)
-    try:
-        fd = os.open(_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-        return True
-    except FileExistsError:
-        return False
-
-
-def _release_lock() -> None:
-    _LOCK_PATH.unlink(missing_ok=True)
 
 
 def _platform_key(name: str) -> str:
@@ -85,13 +54,13 @@ def _is_actively_pursued(row: dict) -> bool:
 
 
 def run() -> None:
-    if not _acquire_lock():
-        logger.warning("別の募集終了チェックが実行中のため、今回はスキップします")
+    if not sheet_lock.acquire():
+        logger.warning("別のシート書き込み処理が実行中のため、今回はスキップします")
         return
     try:
         _run_locked()
     finally:
-        _release_lock()
+        sheet_lock.release()
 
 
 def _run_locked() -> None:

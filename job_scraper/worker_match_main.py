@@ -16,6 +16,7 @@ import logging
 import sys
 
 import config
+from src import sheet_lock
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import (
@@ -36,6 +37,20 @@ logger = logging.getLogger(__name__)
 
 
 def run() -> None:
+    # check_expired_main.pyと同じ行を同時に書き換えると、片方が削除した後に
+    # もう片方が古い行番号のまま書き込んで「exceeds grid limits」エラーになる
+    # （2026-08-15発覚、CrowdWorksの自動チェックと手動でのマッチング実行が重なり
+    # 339件中29件の更新が実際に失敗した）。同じロックを共有して排他する。
+    if not sheet_lock.acquire():
+        logger.warning("別のシート書き込み処理が実行中のため、今回はスキップします")
+        return
+    try:
+        _run_locked()
+    finally:
+        sheet_lock.release()
+
+
+def _run_locked() -> None:
     logger.info("=== ワーカー提案マッチング 開始 ===")
 
     if not config.GOOGLE_SHEET_ID or not config.GOOGLE_SERVICE_ACCOUNT_JSON:
