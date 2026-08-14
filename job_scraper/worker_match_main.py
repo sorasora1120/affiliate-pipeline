@@ -113,21 +113,20 @@ def _run_locked() -> None:
     for c in candidates:
         try:
             proposal_text, worker_text = proposal_and_worker_message(c)
-            try:
-                sheet.update_candidate_details(c["row"], c["margin"], c["quote"], worker_text, proposal_text)
-            except Exception as exc:
-                # シート書き込みに失敗してもDiscord通知自体は続行する
-                # （Discordが今のところの一次情報源であることに変わりはないため）
-                logger.warning("シートへの詳細書き込みに失敗しました (row=%s): %s", c.get("row"), exc)
 
             ok = notify_discord(format_combined_message(c))
             if not ok:
-                # Discord送信が1通でも失敗した案件はステータスを更新しない。
+                # Discord送信が1通でも失敗した案件はシートも更新しない。
                 # 「未チェック」のまま残せば次回実行時に自動的に再送されるので、
-                # 送信失敗＝ステータスだけ進んで内容が消える、という事態を防ぐ。
+                # 送信失敗＝内容が消える、という事態を防ぐ。
                 logger.warning("Discord通知が一部失敗したため未チェックのまま残します (row=%s)", c.get("row"))
                 continue
-            sheet.update_status(c["row"], PROPOSED_STATUS)
+            # 詳細書き込みとステータス更新を1回のAPI呼び出しにまとめる
+            # （2026-08-15、大量マッチングでSheets APIの書き込みレート制限に
+            # 頻繁に当たっていたため、1件あたりのリクエスト数を半分にした）
+            sheet.update_candidate_details_and_status(
+                c["row"], c["margin"], c["quote"], worker_text, proposal_text, PROPOSED_STATUS
+            )
             sent += 1
         except Exception as exc:
             # 1件の通知/更新失敗で残り全件が止まらないようにする

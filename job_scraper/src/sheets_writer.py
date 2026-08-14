@@ -164,27 +164,38 @@ class SheetsWriter:
         if requests:
             self.worksheet.spreadsheet.batch_update({"requests": requests})
 
-    def update_candidate_details(
+    def update_candidate_details_and_status(
         self,
         row_number: int,
         margin: int | None,
         quote: int | None,
         worker_message: str,
         client_proposal: str,
+        status: str,
     ) -> None:
-        """ワーカーマッチングで組み立てた4点セット（利益目安/ワーカー提示額/ワーカー向け
-        メッセージ/クライアント提案文）をシート側にも書き込む。Discordが埋もれても
-        シートを見れば同じ内容を確認できるようにする。"""
+        """ワーカーマッチングで組み立てた4点セット＋ステータス更新を1回のAPI呼び出しに
+        まとめる。update_candidate_details()とupdate_status()を別々に呼ぶと1件あたり
+        2リクエストになり、336件のような大量マッチングでSheets APIの書き込みレート
+        制限（実測: 1分あたり60リクエスト前後）にすぐ当たっていた（2026-08-15発覚）。
+        """
+        status_col = HEADER.index("ステータス") + 1
         start_col = HEADER.index(_CANDIDATE_DETAIL_COLS[0]) + 1
         end_col = HEADER.index(_CANDIDATE_DETAIL_COLS[-1]) + 1
-        rng = f"{_col_letter(start_col)}{row_number}:{_col_letter(end_col)}{row_number}"
+        detail_range = f"{_col_letter(start_col)}{row_number}:{_col_letter(end_col)}{row_number}"
+        status_range = f"{_col_letter(status_col)}{row_number}"
         values = [[
             margin if margin is not None else "見積り要相談",
             quote if quote is not None else "見積り要相談",
             worker_message,
             client_proposal,
         ]]
-        self.worksheet.update(range_name=rng, values=values, value_input_option="USER_ENTERED")
+        self.worksheet.batch_update(
+            [
+                {"range": status_range, "values": [[status]]},
+                {"range": detail_range, "values": values},
+            ],
+            value_input_option="USER_ENTERED",
+        )
 
     def ensure_daily_view(self, date_str: str) -> None:
         """指定日（YYYY-MM-DD）の案件だけを表示する日別タブを用意する。
