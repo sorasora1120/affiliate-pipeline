@@ -33,24 +33,21 @@ def _platform_key(name: str) -> str:
     return "crowdworks" if name == "CrowdWorks" else "coconala"
 
 
-def _is_won_deal(row: dict) -> bool:
-    """採用された（hired）／発注済み（ordered）の案件かどうか。鮮度切れタグ付けからも除外する
-    （タグ付けは削除ではないので安全側だが、進行中の案件に誤ったラベルを付けたくない）。"""
-    return row.get("進捗ステージ") in ("hired", "ordered")
-
-
-def _is_protected_from_deletion(row: dict) -> bool:
-    """自動削除（シートから完全に消す）の対象から外すべき案件かどうか。
+def _is_actively_pursued(row: dict) -> bool:
+    """応募済み（applied）／採用済み（hired）／発注済み（ordered）の案件かどうか。
 
     シートの「ステータス」列は提案済み時点のまま一生変わらず、実際の進行状況は
-    別列の「進捗ステージ」で管理している。募集終了チェックは「ステータス=提案済み」
-    の行を丸ごと対象にするため、何も考えずに実装すると「クライアントに採用されて
-    募集が締め切られた（＝良いこと）」場合まで「募集終了」と誤判定してシートから
-    削除してしまう（2026-08-13発覚、実削除に変更した直後に気づいた）。
-    「応募済み（採用連絡待ち）」の段階も、募集終了だけでは「落選した」のか
-    「採用されたがまだアプリ上で②を押していないだけ」なのか区別できないため、
-    同じ理由で削除対象から外す（タグ付け止まりの鮮度切れチェックとは違い、
-    削除は取り返しがつかないため安全側に倒す）。
+    別列の「進捗ステージ」で管理している。募集終了チェックと鮮度切れチェックは
+    どちらも「ステータス=提案済み」の行を丸ごと対象にするため、何も考えずに
+    実装すると、実際は返信待ちで進行中の案件まで巻き込んでしまう:
+      - 募集終了チェック: 「クライアントに採用されて募集が締め切られた（＝良いこと）」
+        場合と「他の人に決まった（＝落選）」場合を区別できず、削除してしまう
+        （2026-08-13発覚、実削除に変更した直後に気づいた）。
+      - 鮮度切れチェック: 「検出から3日以上経った」だけで判定するため、応募済みで
+        まだ返事待ちの案件（検討に時間がかかることは普通にある）まで「鮮度切れ」
+        タグを付けてビューアから消してしまう（2026-08-14発覚。「採用待ちのやつが
+        消えた」と報告があり判明）。
+    どちらも安全側に倒し、応募済み以降は自動削除・自動タグ付けの対象から外す。
     """
     return row.get("進捗ステージ") in ("applied", "hired", "ordered")
 
@@ -73,7 +70,7 @@ def run() -> None:
         for i, r in enumerate(rows, start=2)
         if r.get("ステータス") == "提案済み"
         and _platform_key(r.get("プラットフォーム", "")) in config.PLATFORMS
-        and not _is_protected_from_deletion(r)
+        and not _is_actively_pursued(r)
     ]
     logger.info("チェック対象: %d件（対象プラットフォーム: %s）", len(url_rows), ", ".join(sorted(config.PLATFORMS)))
 
@@ -92,7 +89,7 @@ def run() -> None:
     row_by_number = {i: r for i, r in enumerate(rows, start=2)}
     stale_rows = [
         r for r in find_stale_rows(rows, config.PLATFORMS)
-        if r not in set(closed_rows) and not _is_won_deal(row_by_number.get(r, {}))
+        if r not in set(closed_rows) and not _is_actively_pursued(row_by_number.get(r, {}))
     ]
     logger.info("鮮度切れ（検出から3日超）: %d件", len(stale_rows))
     if stale_rows:
