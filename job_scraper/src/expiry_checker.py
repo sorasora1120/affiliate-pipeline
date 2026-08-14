@@ -14,11 +14,21 @@
 自動化した。
 """
 import logging
+import re
 from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
 
+from .deadline_utils import normalize_deadline
+
 logger = logging.getLogger(__name__)
+
+# 検索結果一覧のテキストからは締切を取得できない案件が多い（CrowdWorksは
+# 「あとN日」表記が一覧側に出ないケースが大半、ココナラは一覧に締切情報自体が
+# 載っていない）。ここで開く詳細ページには載っていることが多いため、募集終了
+# チェックのついでに正確な締切も取り直す（2026-08-14、「全部に残り日数を書いて」
+# との要望を受けて追加）。
+_DEADLINE_RE = re.compile(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}")
 
 CLOSED_STATUS = "対象外（募集終了）"
 STALE_STATUS = "対象外（鮮度切れ）"
@@ -49,9 +59,16 @@ def find_stale_rows(rows: list[dict], platforms: set[str], today: date | None = 
     return stale_rows
 
 
-def find_closed_rows(url_rows: list[tuple[int, str]]) -> list[int]:
-    """[(行番号, URL), ...] を受け取り、募集終了と判定した行番号のリストを返す。"""
+def find_closed_rows(url_rows: list[tuple[int, str]]) -> tuple[list[int], dict[int, str]]:
+    """[(行番号, URL), ...] を受け取り、(募集終了と判定した行番号のリスト, {行番号: 締切}) を返す。
+
+    締切は、詳細ページを開いたその日を基準に絶対日付へ正規化して返す
+    （収集時点ではなく、いま開いて分かった残り日数のため）。既に募集終了と
+    判定した行は締切を取り直す意味がないので対象に含めない。
+    """
     closed_rows: list[int] = []
+    deadlines: dict[int, str] = {}
+    today = date.today()
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         page = browser.new_context(
@@ -72,6 +89,12 @@ def find_closed_rows(url_rows: list[tuple[int, str]]) -> list[int]:
                 markers = CW_CLOSED_MARKERS if "crowdworks.jp" in url else CO_CLOSED_MARKERS
                 if any(m in body_text for m in markers):
                     closed_rows.append(row_number)
+                    continue
+                deadline_match = _DEADLINE_RE.search(body_text)
+                if deadline_match:
+                    normalized = normalize_deadline(deadline_match.group(0), today)
+                    if normalized != "不明":
+                        deadlines[row_number] = normalized
         finally:
             browser.close()
-    return closed_rows
+    return closed_rows, deadlines

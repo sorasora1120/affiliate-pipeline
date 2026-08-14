@@ -78,8 +78,16 @@ def run() -> None:
         logger.info("チェック対象がありませんでした")
         return
 
-    closed_rows = find_closed_rows(url_rows)
+    closed_rows, deadlines = find_closed_rows(url_rows)
     logger.info("募集終了: %d/%d件", len(closed_rows), len(url_rows))
+
+    if deadlines:
+        # 詳細ページから取り直した正確な締切をシートに書き戻す（2026-08-14、
+        # 「全部に残り日数を書いて」との要望を受けて追加。検索結果一覧からは
+        # 締切を拾えない案件が多く、ビューアで「不明」表示のまま埋もれていた）。
+        updates = [{"range": f"F{row}", "values": [[deadline]]} for row, deadline in deadlines.items()]
+        sheet.worksheet.batch_update(updates, value_input_option="RAW")
+        logger.info("%d件の締切を更新しました", len(deadlines))
 
     # 2026-08-12、「古いやつ消して全部新しい物件にしろ」という指示を受けて手動で
     # 実施した「検出から3日以上経った提案済みを鮮度切れとして除外する」処理を
