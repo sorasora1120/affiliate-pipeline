@@ -627,6 +627,17 @@ function fmtBudget(item) {
   return item.budget;
 }
 
+// 「150,000円 〜 200,000円」のような範囲表記から数字とカンマ以外を単純に
+// 取り除くと「150,000200,000」と2つの金額がくっついて表示されてしまっていた
+// （2026-08-15発覚）。〜/~ の位置で分割し、それぞれ¥を付けて組み直す。
+function fmtBudgetAmount(item) {
+  const raw = String(item.budget || "");
+  const parts = raw.split(/[〜~]/).map(p => p.replace(/[^0-9,]/g, "")).filter(Boolean);
+  if (parts.length >= 2) return `¥${parts[0]}〜¥${parts[1]}`;
+  if (parts.length === 1) return `¥${parts[0]}`;
+  return "予算不明";
+}
+
 function marginYen(item) {
   const v = String(item.margin || "").replace(/[^0-9]/g, "");
   return v ? parseInt(v, 10) : -1;
@@ -641,7 +652,7 @@ function figuresHtml(item) {
     return `<div class="quote-badge">💬 見積り要相談（金額は交渉次第）</div>`;
   }
   return `<div class="figures">
-    <span><span class="f-label">予算</span><span class="f-main num">¥${esc(String(item.budget).replace(/[^0-9,]/g,''))}</span></span>
+    <span><span class="f-label">予算</span><span class="f-main num">${esc(fmtBudgetAmount(item))}</span></span>
     <span><span class="f-label">利益目安</span><span class="f-main num margin-pos">+¥${esc(String(item.margin))}</span></span>
   </div>`;
 }
