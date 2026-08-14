@@ -513,10 +513,19 @@ function slim(row, statusHint) {
   };
 }
 
+// 応募済み・採用済み・発注済みは進行中の実案件なので、下の150件上限に関係なく
+// 絶対に表示から漏らさない（2026-08-15発覚：提案済みが150件を超えた際、
+// 古い方にあった応募済み・採用待ちの案件が丸ごと表示対象から切り捨てられ、
+// 「採用待ちが0件になった」ように見えるバグがあった。表示上限は「まだ何も
+// していない新着」だけにかける）。
+const ACTIVE_STAGES = new Set(["applied", "hired", "ordered"]);
+
 function buildData(rows) {
-  let proposed = rows.filter(r => r[COL.status] === "提案済み" && r[COL.workerMsg]);
-  proposed.reverse();
-  proposed = proposed.slice(0, 150).map(r => slim(r, "proposed"));
+  let allProposed = rows.filter(r => r[COL.status] === "提案済み" && r[COL.workerMsg]);
+  allProposed.reverse();
+  const active = allProposed.filter(r => ACTIVE_STAGES.has(r[COL.stage]));
+  const fresh = allProposed.filter(r => !ACTIVE_STAGES.has(r[COL.stage]));
+  let proposed = active.concat(fresh.slice(0, 150)).map(r => slim(r, "proposed"));
 
   let pending = rows.filter(r =>
     r[COL.status] === "未チェック" &&
