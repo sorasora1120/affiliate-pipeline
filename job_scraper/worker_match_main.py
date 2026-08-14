@@ -23,9 +23,7 @@ from src.worker_matcher import (
     EXCLUDED_KEYWORD_STATUS,
     PROPOSED_STATUS,
     find_candidates,
-    format_info_message,
-    format_proposal_message,
-    format_worker_message,
+    format_combined_message,
     proposal_and_worker_message,
 )
 
@@ -107,11 +105,7 @@ def run() -> None:
                 # （Discordが今のところの一次情報源であることに変わりはないため）
                 logger.warning("シートへの詳細書き込みに失敗しました (row=%s): %s", c.get("row"), exc)
 
-            ok = (
-                notify_discord(format_info_message(c))
-                and notify_discord(format_worker_message(c))
-                and notify_discord(format_proposal_message(c))
-            )
+            ok = notify_discord(format_combined_message(c))
             if not ok:
                 # Discord送信が1通でも失敗した案件はステータスを更新しない。
                 # 「未チェック」のまま残せば次回実行時に自動的に再送されるので、

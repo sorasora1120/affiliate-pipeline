@@ -204,6 +204,23 @@ def format_worker_message(c: dict) -> str:
 
 
 def format_proposal_message(c: dict) -> str:
-    """クライアントへの提案文の下書き（3通目・要編集）。"""
+    """クライアントへの提案文の下書き（3通目）。"""
     proposal, _ = proposal_and_worker_message(c)
-    return f"--- クライアントへの提案文（下書き・●●部分は要編集） ---\n```\n{proposal}\n```"
+    return f"--- クライアントへの提案文（下書き） ---\n```\n{proposal}\n```"
+
+
+def format_combined_message(c: dict) -> str:
+    """3点セットを1通にまとめたもの。
+
+    元は3通に分けていたが、大量にマッチングした案件を一気に通知すると
+    1案件=3リクエストになりDiscordのレート制限（実測retry_after≒1秒）に
+    引っかかって全体の処理時間が3倍になる（2026-08-15発覚、339件の
+    マッチングで顕在化）。詳細はどのみちスプレッドシート/Dispatchビューア
+    側にも書き込んでいるため、Discordは「気づくための通知」の役割で十分
+    ——1案件1通にまとめてリクエスト数を減らす。
+    """
+    return (
+        f"{format_info_message(c)}\n\n"
+        f"{format_worker_message(c)}\n\n"
+        f"{format_proposal_message(c)}"
+    )
