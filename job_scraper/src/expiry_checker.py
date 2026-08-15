@@ -28,7 +28,19 @@ logger = logging.getLogger(__name__)
 # 載っていない）。ここで開く詳細ページには載っていることが多いため、募集終了
 # チェックのついでに正確な締切も取り直す（2026-08-14、「全部に残り日数を書いて」
 # との要望を受けて追加）。
-_DEADLINE_RE = re.compile(r"あと\s*\d+\s*日|\d{4}[/-]\d{1,2}[/-]\d{1,2}")
+#
+# 2026-08-15、ページ全体を無差別に正規表現検索していたため、実際の締切
+# （CrowdWorks「応募期限」欄=「2026年08月20日」のような漢字区切り。旧正規表現は
+# スラッシュ/ハイフン区切りしか対応しておらず全く一致しなかった）ではなく、
+# ページ内の無関係な日付（「掲載日」欄や、他の応募者のコメント投稿日時
+# 「2026/08/13 21:20」等）を誤って締切として拾ってしまうバグが発覚した
+# （提案済み166件中156件に「既に過ぎた締切」が入っていた）。ラベル文字列
+# （CrowdWorks「応募期限」/ココナラ「募集期限」）が最初に出現する位置の直後
+# だけを検索対象にすることで、無関係な日付を除外する。
+_DEADLINE_RE = re.compile(r"あと\s*\d+\s*日|\d{4}[/\-年]\d{1,2}[/\-月]\d{1,2}日?")
+_CW_DEADLINE_LABEL = "応募期限"
+_CO_DEADLINE_LABEL = "募集期限"
+_DEADLINE_SEARCH_WINDOW = 60  # ラベル直後、この文字数以内だけを見る
 
 CLOSED_STATUS = "対象外（募集終了）"
 STALE_STATUS = "対象外（鮮度切れ）"
@@ -90,11 +102,15 @@ def find_closed_rows(url_rows: list[tuple[int, str]]) -> tuple[list[int], dict[i
                 if any(m in body_text for m in markers):
                     closed_rows.append(row_number)
                     continue
-                deadline_match = _DEADLINE_RE.search(body_text)
-                if deadline_match:
-                    normalized = normalize_deadline(deadline_match.group(0), today)
-                    if normalized != "不明":
-                        deadlines[row_number] = normalized
+                label = _CW_DEADLINE_LABEL if "crowdworks.jp" in url else _CO_DEADLINE_LABEL
+                label_pos = body_text.find(label)
+                if label_pos != -1:
+                    window = body_text[label_pos : label_pos + len(label) + _DEADLINE_SEARCH_WINDOW]
+                    deadline_match = _DEADLINE_RE.search(window)
+                    if deadline_match:
+                        normalized = normalize_deadline(deadline_match.group(0), today)
+                        if normalized != "不明":
+                            deadlines[row_number] = normalized
         finally:
             browser.close()
     return closed_rows, deadlines

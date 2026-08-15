@@ -10,7 +10,10 @@ import re
 from datetime import date, timedelta
 
 _RELATIVE_RE = re.compile(r"あと\s*(\d+)\s*日")
-_ABSOLUTE_RE = re.compile(r"(\d{4})[/-](\d{1,2})[/-](\d{1,2})")
+# 2026-08-15追加: CrowdWorksの詳細ページ（「応募期限」欄）の締切表記は
+# 「2026年08月20日」のような漢字区切りで、従来のスラッシュ/ハイフン区切り
+# だけでは一致しなかった（詳しくはexpiry_checker.pyのラベル起点抽出を参照）。
+_ABSOLUTE_RE = re.compile(r"(\d{4})[/\-年](\d{1,2})[/\-月](\d{1,2})日?")
 
 
 def normalize_deadline(raw_text: str, detected_date: date) -> str:
