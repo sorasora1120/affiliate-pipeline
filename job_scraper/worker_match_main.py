@@ -17,6 +17,7 @@ import sys
 
 import config
 from src import sheet_lock
+from src.expiry_checker import CLOSED_STATUS, find_closed_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import (
@@ -73,6 +74,24 @@ def _run_locked() -> None:
         margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
     )
     logger.info("マッチング候補: %d件", len(candidates))
+
+    if candidates:
+        # マッチングした直後に実際のページを開いて生存確認する（2026-08-15、
+        # 「この抽出する過程で期限も見れないの？」との指摘を受けて統合。それまでは
+        # 別工程（check_expired_main.py）が数時間後に確認するまでの間、実際には
+        # もう募集終了している案件でも「提案済み」としてそのまま通知・表示され
+        # 続けていた。ここで一緒に確認すれば、生きている案件しか提案済みにならない）。
+        closed_rows, deadlines = find_closed_rows([(c["row"], c["url"]) for c in candidates])
+        if closed_rows:
+            closed_set = set(closed_rows)
+            updates = [{"range": f"A{row}", "values": [[CLOSED_STATUS]]} for row in closed_rows]
+            sheet.worksheet.batch_update(updates, value_input_option="RAW")
+            logger.info("マッチング直後の生存確認で%d件が募集終了と判明、除外しました", len(closed_rows))
+            candidates = [c for c in candidates if c["row"] not in closed_set]
+        if deadlines:
+            updates = [{"range": f"F{row}", "values": [[d]]} for row, d in deadlines.items()]
+            sheet.worksheet.batch_update(updates, value_input_option="RAW")
+            logger.info("%d件の締切を取得しました", len(deadlines))
 
     if below_budget_rows:
         # 予算未達の行を放置すると「未チェック」のまま残り、次回以降も毎回
