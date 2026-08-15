@@ -44,7 +44,7 @@ jobs:
         working-directory: job_scraper
         env:
           PLATFORMS: coconala
-          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築,オンラインショップ制作,オンラインショップ構築' }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '30' }}
           PAGES_PER_KEYWORD: ${{ vars.PAGES_PER_KEYWORD || '5' }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
