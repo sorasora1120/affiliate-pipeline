@@ -38,7 +38,11 @@ MAX_JOBS_PER_KEYWORD = int(os.getenv("MAX_JOBS_PER_KEYWORD", "30"))
 
 # 1キーワードあたりの検索結果ページ数（2026-08-11追加: 1ページ目だけだと取りこぼしが多いため。
 # CrowdWorks/ココナラとも実機で&page=2の中身が1ページ目とほぼ重複しないことを確認済み）
-PAGES_PER_KEYWORD = int(os.getenv("PAGES_PER_KEYWORD", "2"))
+# 2026-08-15、「サイトには実際もっとある」との指摘を受けて実機で検索結果総数を確認したところ、
+# 「サイト制作」1,973件・Shopify 1,003件・「ホームページ制作」675件と、2ページ（40〜60件）
+# しか見ていなかった収集数に対して桁違いに多いことが分かった。2→5に増量。死んでいる案件は
+# 6回/日の募集終了チェックが自動で削除するため、取得数を増やしても表示品質は保たれる。
+PAGES_PER_KEYWORD = int(os.getenv("PAGES_PER_KEYWORD", "5"))
 
 # ページ間の待機秒数（サーバー負荷軽減のため）
 REQUEST_INTERVAL_SECONDS = float(os.getenv("REQUEST_INTERVAL_SECONDS", "3"))
