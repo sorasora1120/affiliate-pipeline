@@ -9,16 +9,31 @@
   5. エラーは Discord に通知
 """
 
+import json
 import logging
 import os
 import sys
 import time
+from pathlib import Path
 
 from src.article_writer import ArticleWriter
 from src.bluesky_poster import BlueskyPoster
 from src.notifier import notify_discord, notify_error
 from src.scraper import A8Scraper
 from src.wordpress_poster import WordPressPoster
+
+POSTED_FILE = Path("data/posted.json")
+
+
+def load_posted() -> set[str]:
+    if POSTED_FILE.exists():
+        return set(json.loads(POSTED_FILE.read_text(encoding="utf-8")))
+    return set()
+
+
+def save_posted(names: set[str]) -> None:
+    POSTED_FILE.parent.mkdir(exist_ok=True)
+    POSTED_FILE.write_text(json.dumps(sorted(names), ensure_ascii=False, indent=2), encoding="utf-8")
 
 # ---------------------------------------------------------------------------
 # ロギング設定
@@ -57,8 +72,16 @@ def run_pipeline() -> None:
         notify_discord(msg)
         return
 
-    logger.info("%d 件の案件を取得（最大 %d 件を処理）", len(campaigns), MAX_ARTICLES_PER_RUN)
-    targets = campaigns[:MAX_ARTICLES_PER_RUN]
+    # 投稿済みをスキップ
+    posted = load_posted()
+    new_campaigns = [c for c in campaigns if c.service_name not in posted]
+    logger.info("%d 件取得、うち未投稿 %d 件（最大 %d 件を処理）", len(campaigns), len(new_campaigns), MAX_ARTICLES_PER_RUN)
+
+    if not new_campaigns:
+        notify_discord(f"全 {len(campaigns)} 件は投稿済みです。新しい案件が出るまで待機します。")
+        return
+
+    targets = new_campaigns[:MAX_ARTICLES_PER_RUN]
 
     writer = ArticleWriter()
     poster = WordPressPoster()
@@ -82,6 +105,8 @@ def run_pipeline() -> None:
             result = poster.post(article)
             url = result.get("url", "")
             succeeded.append(f"{campaign.service_name} → {url}")
+            posted.add(campaign.service_name)
+            save_posted(posted)
         except Exception as exc:
             notify_error(exc, f"Step 3: ブログ投稿失敗 ({campaign.service_name})")
             failed.append(campaign.service_name)

@@ -7,6 +7,9 @@ on:
     - cron: "0 12 * * *"
   workflow_dispatch:   # 手動実行も可能
 
+permissions:
+  contents: write
+
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
@@ -47,6 +50,15 @@ jobs:
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
         run: python main.py
+
+      - name: 投稿済みリストをリポジトリに保存
+        if: always()
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add data/posted.json
+          git diff --staged --quiet || git commit -m "chore: update posted campaigns"
+          git push
 
       - name: デバッグ用スクリーンショットを保存
         if: always()
