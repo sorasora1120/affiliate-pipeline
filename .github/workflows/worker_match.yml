@@ -37,6 +37,9 @@ jobs:
         working-directory: job_scraper
         run: pip install -r requirements.txt
 
+      - name: Playwright ブラウザをインストール
+        run: playwright install chromium --with-deps
+
       - name: マッチングを実行
         working-directory: job_scraper
         env:
