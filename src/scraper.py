@@ -80,10 +80,16 @@ class A8Scraper:
 
         return body_text
 
-    # ページUI要素として除外するキーワード
+    # ページUI要素・汎用アクション文として除外するキーワード
     _NOISE = {"報酬UP", "報酬アップ", "オーダー数", "報酬額", "詳細を見る", "→", "マイページ",
               "ランキング", "特集", "カテゴリー", "お気に入り", "新着", "すべて見る",
               "締切", "期間限定", "人気ワード", "条件を指定", "本日のおすすめ"}
+
+    # 先頭がこれらで始まる名前はサービス名でなくアクション説明文なのでスキップ
+    _ACTION_PREFIXES = (
+        "新規", "初回", "WEB", "Web", "web", "NEW", "口座開設", "カード発行",
+        "カード受取", "申込", "購入", "契約", "登録", "発行完了",
+    )
 
     def _parse_campaigns(self, text: str, base_url: str, min_reward: int) -> list[Campaign]:
         """ページテキストから案件を抽出"""
@@ -114,7 +120,8 @@ class A8Scraper:
                     or re.match(r"^[\d,]+$", name)
                     or re.match(r"^[\d,]+円", name)
                     or "件" in name
-                    or name in ("0円", "円")
+                    or name in ("0円", "円", "NEW")
+                    or name.startswith(self._ACTION_PREFIXES)
                 )
                 if is_noise:
                     i += 1

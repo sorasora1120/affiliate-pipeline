@@ -7,13 +7,21 @@ import logging
 import os
 from dataclasses import dataclass
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from .scraper import Campaign
 
 logger = logging.getLogger(__name__)
 
 MODEL = "gemini-2.0-flash"
+
+_SAFETY_OFF = [
+    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+]
 
 
 @dataclass
@@ -27,11 +35,14 @@ class Article:
 
 class ArticleWriter:
     def __init__(self) -> None:
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        self.model = genai.GenerativeModel(MODEL)
+        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
     def _ask(self, prompt: str) -> str:
-        resp = self.model.generate_content(prompt)
+        resp = self.client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(safety_settings=_SAFETY_OFF),
+        )
         return resp.text.strip()
 
     def write(self, campaign: Campaign) -> Article:
