@@ -14,7 +14,7 @@ from .scraper import Campaign
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash"
 
 _SAFETY_OFF = [
     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
