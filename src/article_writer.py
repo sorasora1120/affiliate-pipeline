@@ -1,5 +1,6 @@
 """
 Google Gemini API を使って SEO 最適化「課題解決型比較記事」を生成するモジュール。
+Gemini が使えない場合は Groq にフォールバック。
 """
 
 import json
@@ -7,21 +8,9 @@ import logging
 import os
 from dataclasses import dataclass
 
-from google import genai
-from google.genai import types
-
 from .scraper import Campaign
 
 logger = logging.getLogger(__name__)
-
-MODEL = "gemini-2.5-flash"
-
-_SAFETY_OFF = [
-    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-]
 
 
 @dataclass
@@ -33,17 +22,70 @@ class Article:
     campaign: Campaign
 
 
+def _make_gemini_client():
+    from google import genai
+    from google.genai import types as gtypes
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return None, None
+    try:
+        client = genai.Client(
+            api_key=key,
+            http_options={"api_version": "v1"},
+        )
+        return client, gtypes
+    except Exception:
+        return None, None
+
+
+def _ask_gemini(client, gtypes, prompt: str) -> str:
+    safety_off = [
+        gtypes.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+        gtypes.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+        gtypes.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+        gtypes.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+    ]
+    for model in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"):
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=gtypes.GenerateContentConfig(safety_settings=safety_off),
+            )
+            return resp.text.strip()
+        except Exception as e:
+            logger.warning("Gemini %s 失敗: %s", model, e)
+    raise RuntimeError("全Geminiモデル失敗")
+
+
+def _ask_groq(prompt: str) -> str:
+    from groq import Groq
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    resp = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=4096,
+    )
+    return resp.choices[0].message.content.strip()
+
+
 class ArticleWriter:
     def __init__(self) -> None:
-        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self._gemini_client, self._gtypes = _make_gemini_client()
+        self._use_groq = not self._gemini_client or not os.environ.get("GEMINI_API_KEY")
+        if self._use_groq:
+            logger.info("Groq モードで動作")
+        else:
+            logger.info("Gemini モードで動作")
 
     def _ask(self, prompt: str) -> str:
-        resp = self.client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(safety_settings=_SAFETY_OFF),
-        )
-        return resp.text.strip()
+        if not self._use_groq:
+            try:
+                return _ask_gemini(self._gemini_client, self._gtypes, prompt)
+            except Exception as e:
+                logger.warning("Gemini全滅、Groqにフォールバック: %s", e)
+                self._use_groq = True
+        return _ask_groq(prompt)
 
     def write(self, campaign: Campaign) -> Article:
         logger.info("記事生成中: %s", campaign.service_name)
