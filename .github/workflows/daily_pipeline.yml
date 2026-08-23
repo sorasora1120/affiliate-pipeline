@@ -39,6 +39,7 @@ jobs:
           A8_USERNAME: ${{ secrets.A8_USERNAME }}
           A8_PASSWORD: ${{ secrets.A8_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           HATENA_ID: ${{ secrets.HATENA_ID }}
           HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
           HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}

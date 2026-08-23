@@ -45,7 +45,7 @@ def _ask_gemini(client, gtypes, prompt: str) -> str:
         gtypes.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
         gtypes.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
     ]
-    for model in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"):
+    for model in ("gemini-3.6-flash", "gemini-2.0-flash", "gemini-2.5-flash"):
         try:
             resp = client.models.generate_content(
                 model=model,
