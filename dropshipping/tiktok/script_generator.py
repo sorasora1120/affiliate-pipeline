@@ -100,19 +100,15 @@ AIっぽさを一切排除した、本物の人間が話すような台本をJSO
   "video_style": "撮影スタイルの提案（例: 洗面台の前でトーク・スマホ手持ちで歩きながら・テキストのみ等）"
 }}"""
 
-        resp = requests.post(
-            GROQ_API_URL,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json={
-                "model": MODEL,
-                "max_tokens": 1500,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.8,
-            },
-            timeout=30,
+        from groq import Groq
+        client = Groq(api_key=self.api_key)
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1500,
+            temperature=0.8,
         )
-        resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
+        text = completion.choices[0].message.content
 
         import re
         # コードブロック除去
