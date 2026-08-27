@@ -17,16 +17,20 @@ _PREFERRED = [
 def get_groq_model(client) -> str:
     """利用可能なGroqモデルを返す"""
     try:
-        available = {m.id for m in client.models.list().data}
+        models = client.models.list().data
+        available = {m.id for m in models}
+        logger.info("Groq利用可能モデル: %s", sorted(available))
         for model in _PREFERRED:
             if model in available:
                 logger.info("Groqモデル選択: %s", model)
                 return model
-        # 優先リストになければ最初のchat対応モデルを使う
-        for m in client.models.list().data:
-            if "llama" in m.id.lower() or "mixtral" in m.id.lower():
-                logger.info("Groqモデル自動選択: %s", m.id)
-                return m.id
+        # 優先リストになければcontext_windowが大きいllama/mixtralを選ぶ
+        candidates = [m for m in models if "llama" in m.id.lower() or "mixtral" in m.id.lower()]
+        if candidates:
+            # context_windowが大きいものを優先
+            best = max(candidates, key=lambda m: getattr(m, "context_window", 0))
+            logger.info("Groqモデル自動選択: %s (context=%s)", best.id, getattr(best, "context_window", "?"))
+            return best.id
     except Exception as e:
         logger.warning("モデルリスト取得失敗: %s", e)
     return _PREFERRED[-1]  # 最終フォールバック
@@ -37,11 +41,12 @@ def ask_groq(prompt: str, max_tokens: int = 4096, temperature: float = 0.7) -> s
     from groq import Groq
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
     model = get_groq_model(client)
+    current_prompt = prompt
     for tokens in (max_tokens, 2048, 1024, 512):
         try:
             resp = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": current_prompt}],
                 max_tokens=tokens,
                 temperature=temperature,
             )
@@ -49,7 +54,12 @@ def ask_groq(prompt: str, max_tokens: int = 4096, temperature: float = 0.7) -> s
         except Exception as e:
             err = str(e)
             if "max_tokens" in err or "context_window" in err:
-                logger.warning("max_tokens=%d 失敗、%d で再試行", tokens, tokens // 2)
+                logger.warning("max_tokens=%d 失敗、縮小して再試行", tokens)
+                continue
+            if "reduce the length" in err or "too long" in err.lower():
+                # プロンプト自体を半分に切って再試行
+                current_prompt = current_prompt[:len(current_prompt) // 2]
+                logger.warning("プロンプトが長すぎるため半分に切り詰め")
                 continue
             raise
     raise RuntimeError("Groq全トークン数で失敗")
