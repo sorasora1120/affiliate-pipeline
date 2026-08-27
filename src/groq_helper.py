@@ -33,14 +33,23 @@ def get_groq_model(client) -> str:
 
 
 def ask_groq(prompt: str, max_tokens: int = 4096, temperature: float = 0.7) -> str:
-    """Groq APIでテキスト生成"""
+    """Groq APIでテキスト生成。max_tokensが大きすぎる場合は自動で下げて再試行。"""
     from groq import Groq
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
     model = get_groq_model(client)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
-    return resp.choices[0].message.content.strip()
+    for tokens in (max_tokens, 2048, 1024, 512):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=tokens,
+                temperature=temperature,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            err = str(e)
+            if "max_tokens" in err or "context_window" in err:
+                logger.warning("max_tokens=%d 失敗、%d で再試行", tokens, tokens // 2)
+                continue
+            raise
+    raise RuntimeError("Groq全トークン数で失敗")
