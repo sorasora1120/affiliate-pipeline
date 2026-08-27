@@ -100,15 +100,10 @@ AIっぽさを一切排除した、本物の人間が話すような台本をJSO
   "video_style": "撮影スタイルの提案（例: 洗面台の前でトーク・スマホ手持ちで歩きながら・テキストのみ等）"
 }}"""
 
-        from groq import Groq
-        client = Groq(api_key=self.api_key)
-        completion = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
-            temperature=0.8,
-        )
-        text = completion.choices[0].message.content
+        import sys, os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+        from src.groq_helper import ask_groq
+        text = ask_groq(prompt, max_tokens=1500, temperature=0.8)
 
         import re
         # コードブロック除去

@@ -59,14 +59,8 @@ def _ask_gemini(client, gtypes, prompt: str) -> str:
 
 
 def _ask_groq(prompt: str) -> str:
-    from groq import Groq
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    resp = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=4096,
-    )
-    return resp.choices[0].message.content.strip()
+    from .groq_helper import ask_groq
+    return ask_groq(prompt, max_tokens=4096)
 
 
 class ArticleWriter:
