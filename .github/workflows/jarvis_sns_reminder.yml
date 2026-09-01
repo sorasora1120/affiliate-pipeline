@@ -1,0 +1,31 @@
+name: JARVIS SNS投稿リマインダー
+
+# 「作って学ぶJARVIS」(note.com)の告知用X投稿文を、毎日Discordに送るリマインダー。
+# もとはPC常駐アプリ内のsns_reminder.pyで動いていたが、留学等でPCが起動していない
+# 期間もリマインダーを止めないため、GitHub Actions側に移植した。
+# 実際のX投稿は自動化せず、本人がDiscordの通知を見て手動でコピペ投稿する運用。
+on:
+  schedule:
+    # JST 7:30 に毎日実行
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: リマインダーを送信
+        working-directory: jarvis_promo
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.JARVIS_DISCORD_WEBHOOK_URL }}
+        run: python send_reminder.py
