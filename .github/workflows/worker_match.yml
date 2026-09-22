@@ -6,8 +6,10 @@ name: 案件×ワーカー マッチング通知
 # 取得しない（CrowdWorksはクラウドから直接アクセスできないため）。
 on:
   schedule:
-    # job_scraper.ymlの収集完了30分後（2026-08-13、収集を6回/日に増量したのに合わせて変更）
-    - cron: "30 0,4,8,12,16,20 * * *"
+    # job_scraper.ymlの収集完了30分後（2026-08-27、GitHub Actionsの利用上限超過により
+    # 全ワークフローが即失敗する事態が発生したため、job_scraper.ymlの削減に合わせて
+    # 6回/日→3回/日に削減）
+    - cron: "30 0,8,16 * * *"
   workflow_dispatch:
 
 # 定期実行と手動トリガーの重なりを防ぐ（job_scraper.ymlと同じ理由）
