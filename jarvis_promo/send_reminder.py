@@ -10,6 +10,7 @@
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -29,12 +30,25 @@ def send_discord(webhook_url: str, message: str) -> None:
     req = urllib.request.Request(
         webhook_url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # urllibのデフォルトUser-Agent(Python-urllib/x.y)だとDiscord側に
+            # 403 Forbiddenで弾かれるため、ブラウザ相当のUser-Agentを付与する
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status not in (200, 204):
-            raise RuntimeError(f"Discord webhook returned status {resp.status}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status not in (200, 204):
+                raise RuntimeError(f"Discord webhook returned status {resp.status}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Discord webhook returned status {e.code}: {body}") from e
 
 
 def main() -> None:
