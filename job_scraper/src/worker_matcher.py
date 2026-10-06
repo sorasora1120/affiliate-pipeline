@@ -60,8 +60,9 @@ PROPOSAL_TEMPLATE_QUOTE = """はじめまして。Web制作を専門にしてお
 経験豊富なデザイナー・エンジニアと連携したチームで、企画から実装・納品まで一貫して対応しております。案件内容に応じて最適なメンバーをアサインするため、幅広いジャンル・技術要件にも自信を持って対応可能です。
 
 【お見積りについて】
-内容によって金額が変動するため、まずは詳細をお伺いしたうえで
-お見積りをご提示させていただければと思います。
+ご予算の記載がなかったため、同規模の案件を参考に、目安として
+{amount_estimate:,}円〜からのお見積りを想定しております。
+内容を詳しくお伺いしたうえで、正式な金額をご提示いたします。
 
 【進め方】
 1. ヒアリング・要件確認
@@ -140,8 +141,19 @@ def find_candidates(
             # 予算未提示（「見積り希望」等）の案件。ココナラの依頼系案件は
             # 金額を出さずクライアントからの見積もり提案を待つものが多く、
             # ここで弾くと本来アプローチすべき案件まで消えてしまう。
-            # 金額計算はできないので「要見積もり」として金額情報なしで通知する。
-            candidates.append({**base, "amount": None, "margin": None, "quote": None})
+            #
+            # 2026-10-06、「金額の目安が無いと提案が書けない」との指摘を受け、
+            # 実際のクライアント予算が無くても、最低予算ライン(min_budget_yen)を
+            # 仮の基準額として同じ計算式で目安の提示額・利益を出すようにした。
+            # amountはNoneのまま（＝クライアント予算は未確定）にして、見積り依頼
+            # テンプレートを使う分岐はそのまま維持する。is_estimateで、この
+            # margin/quoteが実際の予算に基づかない「目安」であることを示す。
+            est_margin = _calc_margin(min_budget_yen, margin_percent, margin_min_yen, margin_max_yen)
+            est_quote = min_budget_yen - est_margin
+            candidates.append({
+                **base, "amount": None, "amount_estimate": min_budget_yen,
+                "margin": est_margin, "quote": est_quote, "is_estimate": True,
+            })
             continue
 
         amount = parsed_amount
@@ -161,11 +173,12 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
     """(クライアント提案文, ワーカー向けメッセージ) のペアを返す。生のテキストなので
     Discordのコードブロック整形なしでスプレッドシートにもそのまま書き込める。"""
     if c["amount"] is None:
-        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"])
+        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"], amount_estimate=c["amount_estimate"])
         worker_msg = (
             f'Hi! New project: {c["title"]}. '
             f"Client hasn't given a fixed budget yet (quote-based). "
-            f"Could you tell me roughly how much you'd charge for this, so I can quote the client?\n"
+            f"Rough estimate is around ¥{c['quote']:,} but could be more depending on scope — "
+            f"could you tell me roughly how much you'd charge for this, so I can quote the client?\n"
             f'{c["url"]}'
         )
     else:
@@ -190,7 +203,10 @@ def format_info_message(c: dict) -> str:
         client_line += "）"
 
     if c["amount"] is None:
-        budget_line = "💰 クライアント予算: 見積り希望（要相談・金額はまだ不明）"
+        budget_line = (
+            f"💰 クライアント予算: 見積り要相談（目安{c['amount_estimate']:,}円〜 /"
+            f" 目安提示額{c['quote']:,}円 / 目安利益{c['margin']:,}円）"
+        )
     else:
         budget_line = f"💰 クライアント予算 {c['amount']:,}円 / あなたの利益目安 {c['margin']:,}円"
 
