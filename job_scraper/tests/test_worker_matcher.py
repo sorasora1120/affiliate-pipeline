@@ -61,3 +61,14 @@ def test_already_processed_row_is_skipped():
     rows = [_row(ステータス="提案済み")]
     candidates, below_budget, excluded = _match(rows)
     assert candidates == below_budget == excluded == []
+
+
+def test_profit_is_left_after_platform_fee():
+    from src.worker_matcher import platform_fee, split_amount
+
+    # CrowdWorks: 10万円以下20%、10万〜20万10%、20万超5%
+    assert platform_fee("CrowdWorks", 50_000) == 10_000
+    assert platform_fee("CrowdWorks", 300_000) == 20_000 + 10_000 + 5_000
+    fee, margin, quote = split_amount("CrowdWorks", 50_000, 20, 3000, 30000)
+    assert fee + margin + quote == 50_000
+    assert margin == 10_000

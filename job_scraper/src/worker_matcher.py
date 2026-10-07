@@ -244,6 +244,33 @@ def _calc_margin(amount: int, percent: float, min_yen: int, max_yen: int) -> int
     return int(min(max(margin, min_yen), max_yen))
 
 
+# 受注者側のシステム手数料（税込）。2026-10-07まではこれを引かずに
+# 「予算 − 利益 = ワーカー提示額」としていたため、CrowdWorksで受注すると
+# 予算の20%が手数料で消え、表示上の利益がほぼそのまま手数料に食われていた
+# （利益20%・手数料20%で実質ほぼゼロ）。手数料を先に引いてから利益と
+# ワーカー提示額を分ける。料率が変わったらここを直す。
+def platform_fee(platform: str, amount: int) -> int:
+    if platform == "CrowdWorks":
+        # 契約金額のうち10万円以下の部分20%、10万円超〜20万円以下の部分10%、20万円超の部分5%
+        fee = min(amount, 100_000) * 0.20
+        fee += max(min(amount, 200_000) - 100_000, 0) * 0.10
+        fee += max(amount - 200_000, 0) * 0.05
+        return int(fee)
+    if platform == "ランサーズ":
+        return int(amount * 0.165)
+    # ココナラ（出品者手数料22%）。プラットフォーム不明の場合も安全側でこれを使う
+    return int(amount * 0.22)
+
+
+def split_amount(
+    platform: str, amount: int, percent: float, min_yen: int, max_yen: int
+) -> tuple[int, int, int]:
+    """(手数料, 自分の利益, ワーカー提示額) を返す。利益は手数料を引いた後に残る額。"""
+    fee = platform_fee(platform, amount)
+    margin = _calc_margin(amount, percent, min_yen, max_yen)
+    return fee, margin, amount - fee - margin
+
+
 def find_candidates(
     rows: list[dict],
     target_categories: set[str],
@@ -306,10 +333,11 @@ def find_candidates(
             # テンプレートを使う分岐はそのまま維持する。is_estimateで、この
             # margin/quoteが実際の予算に基づかない「目安」であることを示す。
             est_amount = estimate_amount(title, min_budget_yen)
-            est_margin = _calc_margin(est_amount, margin_percent, margin_min_yen, margin_max_yen)
-            est_quote = est_amount - est_margin
+            est_fee, est_margin, est_quote = split_amount(
+                base["platform"], est_amount, margin_percent, margin_min_yen, margin_max_yen
+            )
             candidates.append({
-                **base, "amount": None, "amount_estimate": est_amount,
+                **base, "amount": None, "amount_estimate": est_amount, "fee": est_fee,
                 "margin": est_margin, "quote": est_quote, "is_estimate": True,
             })
             continue
@@ -318,12 +346,11 @@ def find_candidates(
         if amount < min_budget_yen:
             below_budget_rows.append(idx)
             continue
-        margin = _calc_margin(amount, margin_percent, margin_min_yen, margin_max_yen)
-        quote = amount - margin
+        fee, margin, quote = split_amount(base["platform"], amount, margin_percent, margin_min_yen, margin_max_yen)
         if quote <= 0:
             below_budget_rows.append(idx)
             continue
-        candidates.append({**base, "amount": amount, "margin": margin, "quote": quote})
+        candidates.append({**base, "amount": amount, "fee": fee, "margin": margin, "quote": quote})
     return candidates, below_budget_rows, excluded_keyword_rows
 
 
@@ -354,19 +381,23 @@ def review_proposed_rows(
         amount = parse_budget_yen(r.get("予算", ""))
         if amount is not None:
             # 予算のある行も、提案文を最新のテンプレートで作り直す
-            margin = _calc_margin(amount, margin_percent, margin_min_yen, margin_max_yen)
-            if amount - margin > 0:
+            fee, margin, quote = split_amount(
+                r.get("プラットフォーム", ""), amount, margin_percent, margin_min_yen, margin_max_yen
+            )
+            if quote > 0:
                 refreshed.append({
                     "row": idx, "title": title, "url": r.get("URL"),
-                    "amount": amount, "margin": margin, "quote": amount - margin,
+                    "amount": amount, "fee": fee, "margin": margin, "quote": quote,
                 })
             continue
         est_amount = estimate_amount(title, min_budget_yen)
-        est_margin = _calc_margin(est_amount, margin_percent, margin_min_yen, margin_max_yen)
+        est_fee, est_margin, est_quote = split_amount(
+            r.get("プラットフォーム", ""), est_amount, margin_percent, margin_min_yen, margin_max_yen
+        )
         refreshed.append({
             "row": idx, "title": title, "url": r.get("URL"),
-            "amount": None, "amount_estimate": est_amount,
-            "margin": est_margin, "quote": est_amount - est_margin,
+            "amount": None, "amount_estimate": est_amount, "fee": est_fee,
+            "margin": est_margin, "quote": est_quote,
         })
     return irrelevant_rows, refreshed
 
@@ -409,10 +440,13 @@ def format_info_message(c: dict) -> str:
     if c["amount"] is None:
         budget_line = (
             f"💰 クライアント予算: 見積り要相談（目安{c['amount_estimate']:,}円〜 /"
-            f" 目安提示額{c['quote']:,}円 / 目安利益{c['margin']:,}円）"
+            f" 手数料{c['fee']:,}円 / 目安提示額{c['quote']:,}円 / 目安利益{c['margin']:,}円）"
         )
     else:
-        budget_line = f"💰 クライアント予算 {c['amount']:,}円 / あなたの利益目安 {c['margin']:,}円"
+        budget_line = (
+            f"💰 クライアント予算 {c['amount']:,}円 / 手数料 {c['fee']:,}円 /"
+            f" ワーカー提示額 {c['quote']:,}円 / あなたの利益 {c['margin']:,}円"
+        )
 
     return (
         f"■ {c['title']}\n"
