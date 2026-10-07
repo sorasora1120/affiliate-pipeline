@@ -83,6 +83,9 @@ class CrowdWorksScraper:
                         from .notifier import notify_discord
                         page.screenshot(path=f"debug_cw_{keyword}.png")
                         html_snippet = page.locator("body").inner_text()[:1000]
+                        # Discordだけでなく実行ログにも残す（Actions上でブロックされたのか、
+                        # 本当に0件なのかを後から見分けるため）
+                        logger.warning("CrowdWorks 0件 (%s): title=%r body=%r", keyword, page.title(), html_snippet[:300])
                         notify_discord(
                             f"[CrowdWorks] キーワード「{keyword}」で0件でした。"
                             f"ページ構造が変わった可能性があります。\n{html_snippet}"
