@@ -36,6 +36,16 @@ BUDGET_SHORTHAND_RE = re.compile(r"[\d,]+\s*万\s*円|[\d,]+\s*千\s*円")
 BUDGET_RE = re.compile(r"[¥￥][\d,]+|[\d,]+\s*円")
 
 
+class CrowdWorksBlocked(Exception):
+    """CrowdWorksがこの実行環境のIPを403で拒否している。
+
+    GitHub Actionsのランナーは実行ごとに別のIPになり、2026-10-07の実測では
+    通るIPと最初の1ページ目から403になるIPがある。ブロックされたIPで続けても
+    全キーワード0件になるだけなので即座に打ち切り、ワークフロー側で別の
+    ランナーを使ってやり直す（job_scraper.yml）。
+    """
+
+
 class CrowdWorksScraper:
     def fetch_jobs(self, keywords: list[str], max_per_keyword: int = 20,
                     interval_seconds: float = 3.0, pages_per_keyword: int = 2) -> list[JobPosting]:
@@ -68,6 +78,9 @@ class CrowdWorksScraper:
                         except Exception as exc:
                             logger.warning("ページ読み込み失敗 (%s %dページ目): %s", keyword, page_num, exc)
                             continue
+
+                        if "403" in (page.title() or "") and not jobs and not keyword_jobs:
+                            raise CrowdWorksBlocked(page.title())
 
                         page_jobs = self._extract_jobs(page, keyword, max_per_keyword)
                         if not page_jobs:

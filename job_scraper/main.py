@@ -16,13 +16,14 @@
   7. Discord に新着案件を通知（応募の送信はしない）
 """
 import logging
+import os
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import config
 from src.coconala_scraper import CoconalaScraper
-from src.crowdworks_scraper import CrowdWorksScraper
+from src.crowdworks_scraper import CrowdWorksBlocked, CrowdWorksScraper
 from src.worker_matcher import is_relevant_title
 from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
@@ -40,6 +41,13 @@ logger = logging.getLogger(__name__)
 # 1回の実行で依頼者情報を取りに行く最大件数（1件あたり約4秒）
 MAX_DETAIL_FETCH = 150
 JST = timezone(timedelta(hours=9))
+
+
+def _set_output(name: str, value: str) -> None:
+    path = os.getenv("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{name}={value}\n")
 
 
 def run() -> None:
@@ -66,6 +74,11 @@ def run() -> None:
                 config.PAGES_PER_KEYWORD,
             )
             all_jobs.extend(cw_jobs)
+        except CrowdWorksBlocked as exc:
+            # 通知はせず、ワークフローに別のランナーでのやり直しを伝える
+            logger.warning("CrowdWorksにブロックされました（%s）。別のランナーでやり直します", exc)
+            _set_output("blocked", "true")
+            return
         except Exception as exc:
             notify_error(exc, "CrowdWorks スクレイピング失敗")
 

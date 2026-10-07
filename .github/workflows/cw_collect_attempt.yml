@@ -1,0 +1,59 @@
+name: CrowdWorks案件収集（1回分の試行）
+
+# job_scraper.yml から呼ばれる。CrowdWorksはランナーのIPによって通ったり403で
+# 拒否されたりするため（2026-10-07実測）、拒否されたらblocked=trueを返して
+# 呼び出し側が別のランナーでこのワークフローをもう一度呼ぶ。
+on:
+  workflow_call:
+    outputs:
+      blocked:
+        value: ${{ jobs.scrape.outputs.blocked }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      blocked: ${{ steps.collect.outputs.blocked }}
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 依存パッケージをインストール
+        working-directory: job_scraper
+        run: pip install -r requirements.txt
+
+      - name: Playwright ブラウザをインストール
+        run: playwright install chromium --with-deps
+
+      - name: 案件収集を実行
+        id: collect
+        working-directory: job_scraper
+        env:
+          # 2026-10-07、以前はクラウドIPが403で弾かれていたCrowdWorksが取得できることを
+          # 実際にActions上で確認（「サイト制作」1ページで27件）。ユーザーの指示で当面は
+          # CrowdWorksだけに絞る（以前はPCのタスクスケジューラで取得していたが留学中は動かない）。
+          PLATFORMS: crowdworks
+          # 2026-10-06、「もっと案件を増やしたい」との要望を受けて、同じサイト制作系の
+          # 領域内でノーコードツール（STUDIO/ペライチ/Wix）・改修/リニューアル系・
+          # 採用サイト等のキーワードを追加（18→27語）。1回あたりの実行時間はほぼ
+          # 比例して伸びる（約13分→20分程度）。頻度（3回/日）はそのまま、量だけ増やす
+          # （2026-08-27にActions利用上限超過で頻度を減らした反省を踏まえ、同時に
+          # 増やさない）。worker_match.ymlのWORKER_MATCH_CATEGORIESと
+          # dispatch-viewer/index.htmlのWORKER_MATCH_CATEGORIESも必ず同じ内容に揃えること。
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築,STUDIO制作,ペライチ制作,Wix制作,ホームページ改修,ホームページリニューアル,コーポレートサイト作成,採用サイト制作,オウンドメディア構築,ネットショップ開設' }}
+          MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '40' }}
+          PAGES_PER_KEYWORD: ${{ vars.PAGES_PER_KEYWORD || '3' }}
+          REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+        run: python main.py
