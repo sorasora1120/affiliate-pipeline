@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 import config
 from src.coconala_scraper import CoconalaScraper
 from src.crowdworks_scraper import CrowdWorksScraper
+from src.worker_matcher import is_relevant_title
 from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.proposal_generator import generate_proposal
@@ -35,6 +36,9 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+
+# 1回の実行で依頼者情報を取りに行く最大件数（1件あたり約4秒）
+MAX_DETAIL_FETCH = 150
 JST = timezone(timedelta(hours=9))
 
 
@@ -99,7 +103,17 @@ def run() -> None:
 
     # ワーカーマッチング対象になりうる案件だけ、依頼者情報を先に取得しておく
     # （無関係な案件まで毎回詳細ページを開くと時間がかかるため絞り込む）
-    info_targets = [job for job in new_jobs if job.category in config.WORKER_MATCH_CATEGORIES]
+    #
+    # 2026-10-07、CrowdWorksをクラウド収集に切り替えた初回、新着が全件扱いになり
+    # 詳細ページを1件ずつ開くだけでタイムアウト（45分）に達して何も書き込めなかった。
+    # タイトルがサイト制作系で除外キーワードに当たらない案件に絞り、1回あたりの
+    # 上限も設ける（上限を超えた分は依頼者情報なしで登録される）。
+    info_targets = [
+        job for job in new_jobs
+        if job.category in config.WORKER_MATCH_CATEGORIES
+        and is_relevant_title(job.title)
+        and not any(kw in job.title for kw in config.WORKER_MATCH_EXCLUDE_KEYWORDS)
+    ][:MAX_DETAIL_FETCH]
     client_info_map: dict[str, dict] = {}
     if info_targets:
         try:
