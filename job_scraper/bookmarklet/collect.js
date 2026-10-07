@@ -114,9 +114,13 @@
     }
     if (title.length < 3) continue;
 
+    // 「おすすめの仕事」等の枠はサイドバー・ヘッダー・フッターにあるので除外する。
+    // 以前は「カードに検索語が含まれない案件」を除外していたが、ランサーズは
+    // 説明文で検索がヒットするためカードに検索語が出ないことが多く、検索結果の
+    // 大半まで捨てていた（2026-10-07、4件しか取れないとの報告）。無関係な案件は
+    // マッチング側のタイトル判定で外れる。
+    if (card.closest("aside, nav, header, footer")) continue;
     var text = card.textContent || "";
-    // 「おすすめの仕事」等、検索語と無関係な枠のリンクを除外
-    if (keyword && text.indexOf(keyword) === -1) continue;
 
     var bm = text.match(BUDGET_RANGE_RE) || text.match(BUDGET_RE) || text.match(BUDGET_SHORTHAND_RE);
     var budget = bm ? bm[0].replace(/\s+/g, " ") : "不明";
