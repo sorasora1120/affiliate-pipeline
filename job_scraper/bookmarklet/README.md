@@ -1,47 +1,36 @@
-# CrowdWorks案件収集ブックマークレット
+# 案件収集ブックマークレット（CrowdWorks / ランサーズ）
 
-CrowdWorksはGitHub Actionsのクラウド共有IPからのアクセスを403で拒否するため、
-`job_scraper/src/crowdworks_scraper.py`（Playwright版）はクラウド側では
-動かせず、ローカルPCのタスクスケジューラでしか収集できない
-（`.github/workflows/job_scraper.yml`のコメント参照）。
-
-PCが起動していない期間（留学中など）でも、自分のブラウザでCrowdWorksの
-検索結果ページを開いた時にこのブックマークレットを実行すれば、同じ抽出
-ロジックで案件情報をスプレッドシートの行形式（TSV）としてクリップボードに
-コピーできる。自分のブラウザからの通常アクセスなので、クラウド側IPブロック
-の対象にならない。
+CrowdWorksはGitHub Actionsのクラウド共有IPからのアクセスを403で拒否し、
+ランサーズはボット確認画面を出すため、どちらもクラウドから自動収集できない。
+自分のブラウザで検索結果を開いてこのブックマークを押すと、表示中の案件を
+スプレッドシート「案件一覧」の行形式でクリップボードにコピーする。
 
 ## 導入方法
 
-1. ブラウザでブックマークバー（またはブックマーク管理）を開き、新しい
-   ブックマークを作成する
-2. 名前は何でもいい（例: 「CW案件収集」）
-3. URL欄に `crowdworks_collect.min.txt` の中身（`javascript:` で始まる
-   1行）をそのまま貼り付けて保存する
+1. ブラウザで新しいブックマークを作る（名前は「案件収集」など何でもいい）
+2. URL欄に `collect.min.txt` の中身（`javascript:` で始まる1行）をそのまま貼って保存する
 
 ## 使い方
 
-1. CrowdWorksで案件を検索し、検索結果一覧ページ
-   （`crowdworks.jp/public/jobs/search?...`）を開く
-2. 保存したブックマークをクリックする
-3. 「n件コピーしました」と出たら、スプレッドシートの最終行の次の行の
-   A列を選択してペースト（Ctrl+V / Cmd+V）する
+1. CrowdWorksかランサーズで案件を検索し、検索結果一覧を開く
+   （「サイト制作」「LP制作」「ホームページ制作」などで検索すると良い）
+2. 保存したブックマークを押す
+3. 「n件コピーしました」と出たら、スプレッドシート「案件一覧」の最終行の次の行の
+   A列を選んで貼り付ける
 
-キーワード検索なしの「新着の仕事」一覧ページでも動作する（その場合は
-カテゴリ列が空欄になる）。
+貼り付けた案件は、次の定期マッチング（1日3回）で自動的に判定される。サイト制作と
+関係ない案件はそこで外れ、残ったものがDispatchビューアの「送れる案件」に出る。
+ページの作りが変わって0件になったら、ブックマークのコードを直す必要がある。
 
 ## ファイル
 
-- `crowdworks_collect.js` — 読める版のソース（コメント付き）
-- `crowdworks_collect.min.txt` — ブックマークのURL欄にそのまま貼る
-  `javascript:...` の1行
+- `collect.js` — 読める版のソース
+- `collect.min.txt` — ブックマークのURL欄に貼る1行
 
-ソースを直した場合は、`crowdworks_collect.min.txt` を手で直すのではなく
-terserで作り直すこと（素朴な正規表現での圧縮は `"https://..."` のような
-文字列中の `//` をコメントと誤認識して壊れるため、terser等の構文を正しく
-解釈するミニファイアを使うこと）:
+ソースを直したら `collect.min.txt` はterserで作り直すこと（素朴な正規表現での圧縮は
+`"https://..."` の `//` をコメントと誤認して壊れる）:
 
 ```
-npx terser crowdworks_collect.js --compress --mangle -o /tmp/min.js
-node -e 'const fs=require("fs");fs.writeFileSync("crowdworks_collect.min.txt","javascript:"+encodeURIComponent(fs.readFileSync("/tmp/min.js","utf8")))'
+npx terser collect.js --compress --mangle -o /tmp/min.js
+node -e 'const fs=require("fs");fs.writeFileSync("collect.min.txt","javascript:"+encodeURIComponent(fs.readFileSync("/tmp/min.js","utf8")))'
 ```

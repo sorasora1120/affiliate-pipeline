@@ -23,10 +23,11 @@ def parse_budget_yen(text: str) -> int | None:
     if plain:
         # 「30,000円 〜 50,000円」のような範囲は最後（＝上限）を使う
         return int(plain[-1].replace(",", ""))
-    man = _MAN_RE.search(text)
+    # 「5万円 〜 10万円」の範囲も上限を使う（ランサーズで多い表記）
+    man = _MAN_RE.findall(text)
     if man:
-        return int(man.group(1).replace(",", "")) * 10000
-    sen = _SEN_RE.search(text)
+        return int(man[-1].replace(",", "")) * 10000
+    sen = _SEN_RE.findall(text)
     if sen:
-        return int(sen.group(1).replace(",", "")) * 1000
+        return int(sen[-1].replace(",", "")) * 1000
     return None
