@@ -10,7 +10,59 @@
 ワーカーへの提示額は「クライアント予算 − マージン」とする
 （ワーカーには実際の予算より低い額を伝えて交渉の余地を残す）。
 """
+import re
+import unicodedata
+
 from .budget_utils import parse_budget_yen
+
+# カテゴリ（＝収集時の検索キーワード）が一致しても、ココナラの検索は緩く
+# 「アンケート回答者募集」「バイマ出品作業」のような無関係な案件も返してくる
+# （2026-10-07、「ネットショップ」検索の結果がこうした案件ばかりになっているのを
+# 実際の画面で確認）。除外キーワードを足していく方式では追いつかないため、
+# タイトルにサイト制作系の語が1つも無い案件は対象外にする。
+_RELEVANT_WORDS_JA = [
+    "サイト", "ホームページ", "ランディング", "ネットショップ", "通販",
+    "ワードプレス", "ペライチ", "ウェブ", "オウンドメディア", "ページ制作", "ページ作成",
+]
+# 英字の短い語は単語の一部（"project"の"ec"等）に誤一致しないよう、前後が英字でない
+# ことを条件にする。全角英字はNFKC正規化で半角にそろえてから判定する。
+_RELEVANT_WORDS_LATIN = ["hp", "lp", "ec", "web", "shopify", "wordpress", "studio", "wix"]
+
+
+def _normalize(title: str) -> str:
+    return unicodedata.normalize("NFKC", title or "").lower()
+
+
+def is_relevant_title(title: str) -> bool:
+    t = _normalize(title)
+    if any(w in t for w in _RELEVANT_WORDS_JA):
+        return True
+    return any(re.search(rf"(?<![a-z]){w}(?![a-z])", t) for w in _RELEVANT_WORDS_LATIN)
+
+
+# 予算未提示の案件の目安額（クライアントに提示する総額の想定）。一律の額だと
+# 全カードが同じ数字になり目安として役に立たないため、タイトルから案件の種類を
+# 推定して変える。上から順に最初に一致したものを使う。金額はクラウドソーシング
+# 相場の下限寄りの想定で、実態に合わなければここを調整する。
+_ESTIMATE_RULES: list[tuple[list[str], int]] = [
+    (["ec", "ネットショップ", "通販", "shopify"], 150000),
+    (["lp", "ランディング"], 50000),
+    (["studio", "ペライチ", "wix"], 50000),
+    (["コーポレート", "ホームページ", "hp", "wordpress", "ワードプレス", "サイト"], 100000),
+]
+
+
+def estimate_amount(title: str, fallback_yen: int) -> int:
+    t = _normalize(title)
+    for words, amount in _ESTIMATE_RULES:
+        for w in words:
+            if w.isascii():
+                if re.search(rf"(?<![a-z]){w}(?![a-z])", t):
+                    return amount
+            elif w in t:
+                return amount
+    return fallback_yen
+
 
 PROPOSED_STATUS = "提案済み"
 BELOW_BUDGET_STATUS = "対象外（予算未達）"
@@ -115,7 +167,7 @@ def find_candidates(
         if r.get("ステータス") != "未チェック":
             continue
         title = r.get("タイトル", "")
-        if any(kw in title for kw in excluded_keywords):
+        if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):
             excluded_keyword_rows.append(idx)
             continue
 
@@ -148,10 +200,11 @@ def find_candidates(
             # amountはNoneのまま（＝クライアント予算は未確定）にして、見積り依頼
             # テンプレートを使う分岐はそのまま維持する。is_estimateで、この
             # margin/quoteが実際の予算に基づかない「目安」であることを示す。
-            est_margin = _calc_margin(min_budget_yen, margin_percent, margin_min_yen, margin_max_yen)
-            est_quote = min_budget_yen - est_margin
+            est_amount = estimate_amount(title, min_budget_yen)
+            est_margin = _calc_margin(est_amount, margin_percent, margin_min_yen, margin_max_yen)
+            est_quote = est_amount - est_margin
             candidates.append({
-                **base, "amount": None, "amount_estimate": min_budget_yen,
+                **base, "amount": None, "amount_estimate": est_amount,
                 "margin": est_margin, "quote": est_quote, "is_estimate": True,
             })
             continue
@@ -167,6 +220,42 @@ def find_candidates(
             continue
         candidates.append({**base, "amount": amount, "margin": margin, "quote": quote})
     return candidates, below_budget_rows, excluded_keyword_rows
+
+
+def review_proposed_rows(
+    rows: list[dict],
+    excluded_keywords: list[str],
+    min_budget_yen: int,
+    margin_percent: float,
+    margin_min_yen: int,
+    margin_max_yen: int,
+) -> tuple[list[int], list[dict]]:
+    """既に「提案済み」でまだ誰も手を付けていない（進捗ステージが空の）行を見直す。
+
+    関連性チェックを入れる前に提案済みになった無関係な案件がビューアの
+    「送れる案件」に残り続けるため、同じ基準で外す行番号一覧と、予算未提示で
+    目安額を（種類別の新しい基準で）付け直す候補一覧を返す。応募済み等、
+    進捗ステージが付いた行は本人が既に動いているので触らない。
+    """
+    irrelevant_rows: list[int] = []
+    refreshed: list[dict] = []
+    for idx, r in enumerate(rows, start=2):
+        if r.get("ステータス") != PROPOSED_STATUS or r.get("進捗ステージ"):
+            continue
+        title = r.get("タイトル", "")
+        if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):
+            irrelevant_rows.append(idx)
+            continue
+        if parse_budget_yen(r.get("予算", "")) is not None:
+            continue
+        est_amount = estimate_amount(title, min_budget_yen)
+        est_margin = _calc_margin(est_amount, margin_percent, margin_min_yen, margin_max_yen)
+        refreshed.append({
+            "row": idx, "title": title, "url": r.get("URL"),
+            "amount": None, "amount_estimate": est_amount,
+            "margin": est_margin, "quote": est_amount - est_margin,
+        })
+    return irrelevant_rows, refreshed
 
 
 def proposal_and_worker_message(c: dict) -> tuple[str, str]:

@@ -27,6 +27,7 @@ from src.worker_matcher import (
     find_candidates,
     format_combined_message,
     proposal_and_worker_message,
+    review_proposed_rows,
 )
 
 logging.basicConfig(
@@ -63,6 +64,8 @@ def _run_locked() -> None:
         worksheet_name=config.GOOGLE_WORKSHEET_NAME,
     )
     rows = sheet.all_records()
+
+    _review_existing_proposals(sheet, rows)
 
     candidates, below_budget_rows, excluded_keyword_rows = find_candidates(
         rows,
@@ -153,6 +156,42 @@ def _run_locked() -> None:
             logger.warning("案件の通知に失敗しました (row=%s): %s", c.get("row"), exc)
 
     logger.info("%d/%d件を「%s」に更新しました", sent, len(candidates), PROPOSED_STATUS)
+
+
+def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
+    """未着手の「提案済み」行から無関係な案件を外し、予算未提示の行の目安額を
+    最新の基準で付け直す。それぞれ1回のbatch_updateにまとめる（1行ずつ書くと
+    Sheets APIの書き込みレート制限に当たるため）。"""
+    irrelevant_rows, refreshed = review_proposed_rows(
+        rows,
+        excluded_keywords=config.WORKER_MATCH_EXCLUDE_KEYWORDS,
+        min_budget_yen=config.WORKER_MATCH_MIN_BUDGET_YEN,
+        margin_percent=config.WORKER_MATCH_MARGIN_PERCENT,
+        margin_min_yen=config.WORKER_MATCH_MARGIN_MIN_YEN,
+        margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
+    )
+    if irrelevant_rows:
+        try:
+            sheet.worksheet.batch_update(
+                [{"range": f"A{row}", "values": [[EXCLUDED_KEYWORD_STATUS]]} for row in irrelevant_rows],
+                value_input_option="RAW",
+            )
+            logger.info("提案済みのうち無関係な%d件を「%s」に戻しました", len(irrelevant_rows), EXCLUDED_KEYWORD_STATUS)
+        except Exception as exc:
+            logger.warning("無関係な提案済み行の更新に失敗しました: %s", exc)
+    if refreshed:
+        try:
+            updates = []
+            for c in refreshed:
+                proposal_text, worker_text = proposal_and_worker_message(c)
+                updates.append({
+                    "range": f"M{c['row']}:P{c['row']}",
+                    "values": [[c["margin"], c["quote"], worker_text, proposal_text]],
+                })
+            sheet.worksheet.batch_update(updates, value_input_option="RAW")
+            logger.info("予算未提示の提案済み%d件の目安額を付け直しました", len(refreshed))
+        except Exception as exc:
+            logger.warning("目安額の付け直しに失敗しました: %s", exc)
 
 
 if __name__ == "__main__":
