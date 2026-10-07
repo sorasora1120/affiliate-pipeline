@@ -159,8 +159,8 @@ def _run_locked() -> None:
 
 
 def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
-    """未着手の「提案済み」行から無関係な案件を外し、予算未提示の行の目安額を
-    最新の基準で付け直す。それぞれ1回のbatch_updateにまとめる（1行ずつ書くと
+    """未着手の「提案済み」行から無関係な案件を外し、残りの行の金額・提案文を
+    最新の基準とテンプレートで付け直す。それぞれ1回のbatch_updateにまとめる（1行ずつ書くと
     Sheets APIの書き込みレート制限に当たるため）。"""
     irrelevant_rows, refreshed = review_proposed_rows(
         rows,
@@ -189,9 +189,9 @@ def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
                     "values": [[c["margin"], c["quote"], worker_text, proposal_text]],
                 })
             sheet.worksheet.batch_update(updates, value_input_option="RAW")
-            logger.info("予算未提示の提案済み%d件の目安額を付け直しました", len(refreshed))
+            logger.info("提案済み%d件の金額・提案文を付け直しました", len(refreshed))
         except Exception as exc:
-            logger.warning("目安額の付け直しに失敗しました: %s", exc)
+            logger.warning("提案済み行の付け直しに失敗しました: %s", exc)
 
 
 if __name__ == "__main__":

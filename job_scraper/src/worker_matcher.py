@@ -68,14 +68,115 @@ PROPOSED_STATUS = "提案済み"
 BELOW_BUDGET_STATUS = "対象外（予算未達）"
 EXCLUDED_KEYWORD_STATUS = "対象外（除外キーワード）"
 
+# 制作サンプル（dispatch-viewerリポジトリのworks/、GitHub Pagesで公開）。どれも
+# 架空の店舗・事務所であることをページ上に明記している。
+PORTFOLIO_BASE_URL = "https://sorasora1120.github.io/dispatch-viewer/works/"
+_SAMPLES = {
+    "salon": ("美容室サイト", "salon.html"),
+    "accounting": ("会計事務所コーポレートサイト", "accounting.html"),
+    "cafe": ("カフェのLP", "cafe.html"),
+}
+
+# 2026-10-07、応募49件で採用0件だったため、どの案件にも同じ文面だった提案文を
+# 案件の種類ごとに書き分け、制作サンプルへのリンクと事前確認の質問を入れた。
+# 「募集を読んだうえで書いている」と伝わる具体的な一文と質問が無いと、
+# 実績の少ないアカウントは定型文として読み飛ばされやすい。
+# タイトルから上から順に最初に一致した種類を使う（estimate_amountと同じ判定）。
+_JOB_TYPES: list[tuple[str, list[str]]] = [
+    ("ec", ["ec", "ネットショップ", "通販", "shopify", "base"]),
+    ("lp", ["lp", "ランディング"]),
+    ("nocode", ["studio", "ペライチ", "wix"]),
+    ("recruit", ["採用"]),
+    ("renewal", ["リニューアル", "改修", "修正"]),
+    ("shop", ["美容", "サロン", "店舗", "カフェ", "飲食", "クリニック", "整体", "教室"]),
+    ("corporate", ["コーポレート", "会社", "企業", "事務所", "士業"]),
+    ("wordpress", ["wordpress", "ワードプレス"]),
+]
+
+_TYPE_TEXT: dict[str, dict] = {
+    "ec": {
+        "point": "ネットショップは「見た目」以上に、商品の探しやすさと購入までの導線で売上が大きく変わると考えています。カート・決済・配送設定まで含めて、運用開始後に困らない形でお渡しします。",
+        "questions": ["想定している商品数と、決済方法（クレジットカード・コンビニ払い等）のご希望", "Shopify・BASEなど、使いたいサービスのご希望はありますか"],
+        "samples": ["cafe", "salon"],
+    },
+    "lp": {
+        "point": "LPは「誰に・何を・どう行動してほしいか」で構成が決まるため、まず訴求ポイントとターゲットを整理し、問い合わせや購入につながる流れで設計いたします。",
+        "questions": ["LPのゴール（問い合わせ・購入・資料請求など）", "広告から流す予定か、参考にしたいLPがあれば教えてください"],
+        "samples": ["cafe", "accounting"],
+    },
+    "nocode": {
+        "point": "ご指定のツールで制作し、納品後はご自身で文章や写真を簡単に更新できるよう、編集方法もあわせてお伝えいたします。",
+        "questions": ["ページ数とおおよその構成のご希望", "ドメイン・アカウントは既にお持ちでしょうか"],
+        "samples": ["salon", "cafe"],
+    },
+    "recruit": {
+        "point": "採用サイトは、求職者が「ここで働く自分」をイメージできるかが応募数を左右すると考えています。仕事内容・社員の声・応募導線を分かりやすく整理いたします。",
+        "questions": ["募集している職種と、特に来てほしい人物像", "社員インタビューや写真素材はご用意がありますか"],
+        "samples": ["accounting", "salon"],
+    },
+    "renewal": {
+        "point": "リニューアルでは、今のサイトで分かりにくくなっている点を先に整理し、見た目の刷新だけでなく問い合わせにつながる構成への改善もあわせてご提案いたします。",
+        "questions": ["現在のサイトのURLと、特に改善したい点", "ページ数は現状のままか、増減のご予定はありますか"],
+        "samples": ["accounting", "salon"],
+    },
+    "shop": {
+        "point": "店舗のサイトは、初めての方が「行ってみたい」と感じて、そのまま予約・来店につながることが大切だと考えています。雰囲気が伝わるデザインと、迷わない予約導線を意識して制作いたします。",
+        "questions": ["予約方法（電話・予約システム・LINEなど）のご希望", "写真やロゴはご用意がありますか"],
+        "samples": ["salon", "cafe"],
+    },
+    "corporate": {
+        "point": "コーポレートサイトは、初めて訪れた方に信頼感を持っていただき、問い合わせまで迷わず進めることが重要だと考えています。事業内容が一目で伝わる構成でご提案いたします。",
+        "questions": ["想定しているページ構成（会社概要・サービス・お問い合わせ等）", "参考にしたいサイトがあれば教えてください"],
+        "samples": ["accounting", "salon"],
+    },
+    "wordpress": {
+        "point": "WordPressで、納品後もご自身でお知らせやブログを簡単に更新できるよう構築し、更新方法もあわせてお伝えいたします。",
+        "questions": ["サーバー・ドメインは既にご契約済みでしょうか", "想定しているページ数と、更新したい箇所"],
+        "samples": ["accounting", "salon"],
+    },
+    "default": {
+        "point": "募集内容を拝見し、実際に使う方の目線に立った分かりやすさが求められている案件だと感じました。要件を丁寧に汲み取り、イメージ以上の仕上がりをお届けいたします。",
+        "questions": ["サイトの主な目的（集客・問い合わせ・採用など）", "参考にしたいサイトや、ご用意済みの素材があれば教えてください"],
+        "samples": ["accounting", "salon"],
+    },
+}
+
+
+def job_type(title: str) -> str:
+    t = _normalize(title)
+    for key, words in _JOB_TYPES:
+        for w in words:
+            if w.isascii():
+                if re.search(rf"(?<![a-z]){w}(?![a-z])", t):
+                    return key
+            elif w in t:
+                return key
+    return "default"
+
+
+def _tailored_parts(title: str) -> dict:
+    spec = _TYPE_TEXT[job_type(title)]
+    samples = "\n".join(
+        f"・{_SAMPLES[k][0]}: {PORTFOLIO_BASE_URL}{_SAMPLES[k][1]}" for k in spec["samples"]
+    )
+    return {
+        "point": spec["point"],
+        "samples": samples,
+        "portfolio": PORTFOLIO_BASE_URL,
+        "questions": "\n".join(f"・{q}" for q in spec["questions"]),
+    }
+
+
 PROPOSAL_TEMPLATE = """はじめまして。Web制作を専門にしております、ソラと申します。
-「{title}」の募集を拝見し、ぜひこの案件に携わらせていただきたく、ご提案させていただきました。
+「{title}」の募集を拝見し、ぜひお手伝いさせていただきたくご提案いたします。
 
-【この案件について感じたこと】
-募集内容を拝見して、単に形にするだけでなく、実際に使う方の目線に立った仕上がりが求められている案件だと感じました。要件を丁寧に汲み取り、そのイメージ以上のものをお届けできるよう、責任を持って対応いたします。
+【ご提案のポイント】
+{point}
 
-【対応体制】
-経験豊富なデザイナー・エンジニアと連携したチームで、企画から実装・納品まで一貫して対応しております。案件内容に応じて最適なメンバーをアサインするため、幅広いジャンル・技術要件にも自信を持って対応可能です。
+【制作サンプル】
+{samples}
+（その他のサンプル: {portfolio}）
+※スマホ・タブレットでもご確認いただけます
 
 【お見積り】
 ・{title}: {amount:,}円一式
@@ -88,33 +189,38 @@ PROPOSAL_TEMPLATE = """はじめまして。Web制作を専門にしておりま
 4. テスト・最終確認
 5. 納品
 
-【納期】
-ご発注後、詳細をすり合わせのうえで決定させていただきます
+【事前に確認させてください】
+{questions}
 
 【対応にあたって大切にしていること】
 ・認識のズレを防ぐため、着手前のヒアリングを丁寧に行います
-・進捗はこまめにご連絡し、音信不通には絶対にいたしません
+・進捗はこまめにご連絡し、ご返信は原則24時間以内にいたします
 ・修正のご相談にも柔軟に対応いたします
 
-「{title}」、ぜひ形にするお手伝いをさせてください。ご不明点等ございましたら、お気軽にお問い合わせください。
+ご不明点等ございましたら、お気軽にお問い合わせください。
 ご検討のほど、よろしくお願いいたします。
 
 ソラ"""
 
-# 予算が「見積り希望」等で未提示の案件用（金額を書けないため、まず要件確認を提案する）
+# 予算が「見積り希望」等で未提示の案件用（目安額を示し、正式な金額は要件確認後に出す）
 PROPOSAL_TEMPLATE_QUOTE = """はじめまして。Web制作を専門にしております、ソラと申します。
-「{title}」の募集を拝見し、ぜひこの案件に携わらせていただきたく、ご連絡させていただきました。
+「{title}」の募集を拝見し、ぜひお手伝いさせていただきたくご連絡いたしました。
 
-【この案件について感じたこと】
-募集内容を拝見して、単に形にするだけでなく、実際に使う方の目線に立った仕上がりが求められている案件だと感じました。要件を丁寧に汲み取り、そのイメージ以上のものをお届けできるよう、責任を持って対応いたします。
+【ご提案のポイント】
+{point}
 
-【対応体制】
-経験豊富なデザイナー・エンジニアと連携したチームで、企画から実装・納品まで一貫して対応しております。案件内容に応じて最適なメンバーをアサインするため、幅広いジャンル・技術要件にも自信を持って対応可能です。
+【制作サンプル】
+{samples}
+（その他のサンプル: {portfolio}）
+※スマホ・タブレットでもご確認いただけます
 
 【お見積りについて】
 ご予算の記載がなかったため、同規模の案件を参考に、目安として
 {amount_estimate:,}円〜からのお見積りを想定しております。
-内容を詳しくお伺いしたうえで、正式な金額をご提示いたします。
+下記をお伺いできましたら、正式な金額をすぐにご提示いたします。
+
+【事前に確認させてください】
+{questions}
 
 【進め方】
 1. ヒアリング・要件確認
@@ -125,10 +231,9 @@ PROPOSAL_TEMPLATE_QUOTE = """はじめまして。Web制作を専門にしてお
 
 【対応にあたって大切にしていること】
 ・認識のズレを防ぐため、着手前のヒアリングを丁寧に行います
-・進捗はこまめにご連絡し、音信不通には絶対にいたしません
+・進捗はこまめにご連絡し、ご返信は原則24時間以内にいたします
 ・修正のご相談にも柔軟に対応いたします
 
-「{title}」、ぜひ形にするお手伝いをさせてください。詳細をお伺いできましたら、具体的なお見積りをご提示いたします。
 ご検討のほど、よろしくお願いいたします。
 
 ソラ"""
@@ -233,8 +338,8 @@ def review_proposed_rows(
     """既に「提案済み」でまだ誰も手を付けていない（進捗ステージが空の）行を見直す。
 
     関連性チェックを入れる前に提案済みになった無関係な案件がビューアの
-    「送れる案件」に残り続けるため、同じ基準で外す行番号一覧と、予算未提示で
-    目安額を（種類別の新しい基準で）付け直す候補一覧を返す。応募済み等、
+    「送れる案件」に残り続けるため、同じ基準で外す行番号一覧と、金額・提案文を
+    最新の基準とテンプレートで付け直す候補一覧を返す。応募済み等、
     進捗ステージが付いた行は本人が既に動いているので触らない。
     """
     irrelevant_rows: list[int] = []
@@ -246,7 +351,15 @@ def review_proposed_rows(
         if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):
             irrelevant_rows.append(idx)
             continue
-        if parse_budget_yen(r.get("予算", "")) is not None:
+        amount = parse_budget_yen(r.get("予算", ""))
+        if amount is not None:
+            # 予算のある行も、提案文を最新のテンプレートで作り直す
+            margin = _calc_margin(amount, margin_percent, margin_min_yen, margin_max_yen)
+            if amount - margin > 0:
+                refreshed.append({
+                    "row": idx, "title": title, "url": r.get("URL"),
+                    "amount": amount, "margin": margin, "quote": amount - margin,
+                })
             continue
         est_amount = estimate_amount(title, min_budget_yen)
         est_margin = _calc_margin(est_amount, margin_percent, margin_min_yen, margin_max_yen)
@@ -262,7 +375,9 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
     """(クライアント提案文, ワーカー向けメッセージ) のペアを返す。生のテキストなので
     Discordのコードブロック整形なしでスプレッドシートにもそのまま書き込める。"""
     if c["amount"] is None:
-        proposal = PROPOSAL_TEMPLATE_QUOTE.format(title=c["title"], amount_estimate=c["amount_estimate"])
+        proposal = PROPOSAL_TEMPLATE_QUOTE.format(
+            title=c["title"], amount_estimate=c["amount_estimate"], **_tailored_parts(c["title"])
+        )
         worker_msg = (
             f'Hi! New project: {c["title"]}. '
             f"Client hasn't given a fixed budget yet (quote-based). "
@@ -271,7 +386,7 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
             f'{c["url"]}'
         )
     else:
-        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"])
+        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"], **_tailored_parts(c["title"]))
         worker_msg = (
             f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?\n'
             f'{c["url"]}'
