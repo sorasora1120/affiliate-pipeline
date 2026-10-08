@@ -1,0 +1,31 @@
+name: 成果のまとめ（1日1回）
+
+# 2026-10-08追加。応募・返信・採用の数と、案件の種類・予算・応募者数ごとの返信率を出す。
+# 定期実行（JST 22:41）では Discord にまとめを送る。手動実行（Claudeの定期チェック用）では
+# 送らずに、数字を GitHub の注釈に出すだけ。
+on:
+  schedule:
+    - cron: "41 13 * * *"
+  workflow_dispatch:
+    inputs:
+      send_discord:
+        description: "Discordにも送る（1で送る）"
+        default: "0"
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 集計
+        working-directory: job_scraper
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+          SEND_DISCORD: ${{ github.event_name == 'schedule' && '1' || inputs.send_discord }}
+        run: python daily_stats.py

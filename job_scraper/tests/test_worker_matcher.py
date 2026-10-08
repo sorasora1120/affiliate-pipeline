@@ -155,3 +155,24 @@ class RelevantTitleTest(unittest.TestCase):
         self.assertTrue(is_relevant_title("HTML/CSSのコーディングをお願いします"))
         self.assertTrue(is_relevant_title("HTMLの修正依頼"))
 
+
+class QuoteBudgetTest(unittest.TestCase):
+    def test_range_uses_middle(self):
+        from src.budget_utils import quote_budget_yen
+        self.assertEqual(quote_budget_yen("30,000円 〜 50,000円"), 40000)
+        self.assertEqual(quote_budget_yen("10,000円 〜 25,000円"), 17000)
+        self.assertEqual(quote_budget_yen("5万円 〜 10万円"), 75000)
+
+    def test_single_amount_is_unchanged(self):
+        from src.budget_utils import quote_budget_yen
+        self.assertEqual(quote_budget_yen("80,000円"), 80000)
+        self.assertEqual(quote_budget_yen("〜 5,000円"), 5000)
+        self.assertIsNone(quote_budget_yen("見積り希望"))
+
+    def test_candidate_quotes_middle_but_eligibility_uses_upper(self):
+        cands, below, _ = find_candidates([_row(予算="3,000円 〜 8,000円")], CATEGORIES, EXCLUDE, 5000, 20, 1000, 30000)
+        self.assertEqual(below, [])
+        self.assertEqual(cands[0]["amount"], 5000)
+        cands, below, _ = find_candidates([_row(予算="1,000円 〜 4,000円")], CATEGORIES, EXCLUDE, 5000, 20, 1000, 30000)
+        self.assertEqual(cands, [])
+

@@ -14,7 +14,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
-from .budget_utils import parse_budget_yen
+from .budget_utils import parse_budget_yen, quote_budget_yen
 
 # カテゴリ（＝収集時の検索キーワード）が一致しても、ココナラの検索は緩く
 # 「アンケート回答者募集」「バイマ出品作業」のような無関係な案件も返してくる
@@ -616,10 +616,12 @@ def find_candidates(
             })
             continue
 
-        amount = parsed_amount
-        if amount < min_budget_yen:
+        if parsed_amount < min_budget_yen:
             below_budget_rows.append(idx)
             continue
+        # 応募するかどうかは上限で決め、提案文で出す金額は範囲の真ん中にする（2026-10-08）。
+        # 真ん中が最低予算より低い時は最低予算（ただし上限まで）にする
+        amount = max(quote_budget_yen(r.get("予算", "")) or parsed_amount, min(min_budget_yen, parsed_amount))
         fee, margin, quote = split_amount(base["platform"], amount, margin_percent, margin_min_yen, margin_max_yen)
         if quote <= 0:
             below_budget_rows.append(idx)
@@ -654,6 +656,8 @@ def review_proposed_rows(
             continue
         amount = parse_budget_yen(r.get("予算", ""))
         if amount is not None:
+            # 提案で出す金額は範囲の真ん中（find_candidates と同じ考え方）
+            amount = max(quote_budget_yen(r.get("予算", "")) or amount, min(min_budget_yen, amount))
             # 予算のある行も、提案文を最新のテンプレートで作り直す
             fee, margin, quote = split_amount(
                 r.get("プラットフォーム", ""), amount, margin_percent, margin_min_yen, margin_max_yen

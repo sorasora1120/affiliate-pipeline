@@ -31,3 +31,23 @@ def parse_budget_yen(text: str) -> int | None:
     if sen:
         return int(sen[-1].replace(",", "")) * 1000
     return None
+
+
+def quote_budget_yen(text: str) -> int | None:
+    """提案文で出す金額。範囲表記（「30,000円 〜 50,000円」）は真ん中を千円単位で切り捨てて使う。
+
+    2026-10-08、200件応募して返信3件だったため。評価0件のうちに依頼者の上限ぴったりで出すと
+    割高に見えるので、範囲の真ん中にする。範囲でなければ parse_budget_yen と同じ。
+    """
+    if not text:
+        return None
+    for regex, unit in ((_PLAIN_RE, 1), (_MAN_RE, 10000), (_SEN_RE, 1000)):
+        found = [int(x.replace(",", "")) * unit for x in regex.findall(text)]
+        if not found:
+            continue
+        low, high = found[0], found[-1]
+        if len(found) < 2 or low >= high:
+            return high
+        return max(low, (low + high) // 2 // 1000 * 1000)
+    return None
+
