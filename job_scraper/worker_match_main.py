@@ -26,6 +26,7 @@ from src.worker_matcher import (
     PROPOSED_STATUS,
     find_candidates,
     format_combined_message,
+    pick_wish_sentence,
     proposal_and_worker_message,
     review_proposed_rows,
 )
@@ -199,6 +200,8 @@ def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
             updates = []
             for c in refreshed:
                 proposal_text, worker_text = proposal_and_worker_message(c)
+                # 募集文から拾った一言を確認できるようにログに残す
+                logger.info("一言 row=%s: %s", c["row"], pick_wish_sentence(c.get("description", "")) or "（なし）")
                 updates.append({
                     "range": f"M{c['row']}:P{c['row']}",
                     "values": [[c["margin"], c["quote"], worker_text, proposal_text]],
