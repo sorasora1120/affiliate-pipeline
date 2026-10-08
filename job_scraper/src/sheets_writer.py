@@ -50,6 +50,9 @@ HEADER = [
     # 使うと進行状況が共有されない問題があった。ここに書き込むことで全員が同じ
     # 進行状況を見られるようにする（書き込みはGoogle Apps Script Web App経由）。
     "進捗ステージ",
+    # 2026-10-07追加: 収集時点の応募者数（CrowdWorksのみ）。ライバルが少ない
+    # 案件を優先して応募するため。
+    "応募者数",
 ]
 
 # 「検出日」（YYYY-MM-DD、時刻なしの日付専用列）のインデックス。日別タブのQUERY式で参照する。
@@ -121,6 +124,9 @@ class SheetsWriter:
             self.worksheet.append_row(HEADER)
 
         if _retry_on_transient_error(lambda: self.worksheet.row_values(1)) != HEADER:
+            # 列を追加した時、シートの列数が足りないとヘッダー更新が範囲外エラーになる
+            if self.worksheet.col_count < len(HEADER):
+                self.worksheet.add_cols(len(HEADER) - self.worksheet.col_count)
             self.worksheet.update(range_name="A1", values=[HEADER])
             try:
                 _apply_sheet_formatting(self.worksheet)
@@ -254,6 +260,7 @@ class SheetsWriter:
                 "", "", "", "",
                 job.detected_at[:10],  # "YYYY-MM-DD HH:MM" の先頭10文字 = 日付部分（検出日列）
                 "",  # 進捗ステージ（新規案件は未着手＝空欄）
+                info.get("applicants", ""),
             ])
         # RAW指定: USER_ENTEREDだと「検出日時」列（"2026-08-01 11:25"のような文字列）が
         # Sheets側で日付シリアル値に自動変換されてしまい、日別タブのQUERY(...like...)による

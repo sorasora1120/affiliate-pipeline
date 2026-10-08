@@ -12,6 +12,7 @@
 """
 import re
 import unicodedata
+from datetime import date, timedelta
 
 from .budget_utils import parse_budget_yen
 
@@ -66,6 +67,8 @@ def estimate_amount(title: str, fallback_yen: int) -> int:
 
 PROPOSED_STATUS = "提案済み"
 BELOW_BUDGET_STATUS = "対象外（予算未達）"
+# 「予算未達」の案件を、最低予算の変更後に拾い直す対象にする期間（検出からの日数）
+RECHECK_BELOW_BUDGET_DAYS = 3
 EXCLUDED_KEYWORD_STATUS = "対象外（除外キーワード）"
 
 # 制作サンプル（dispatch-viewerリポジトリのworks/、GitHub Pagesで公開）。どれも
@@ -192,6 +195,11 @@ PROPOSAL_TEMPLATE = """はじめまして。Web制作を専門にしておりま
 【事前に確認させてください】
 {questions}
 
+【初めてのお取引について】
+クラウドワークスでの活動を始めたばかりのため、評価はまだ多くありません。
+その分、1件1件に時間をかけて丁寧に対応いたします。
+制作サンプルや事前のやり取りでご判断いただけましたら幸いです。
+
 【対応にあたって大切にしていること】
 ・認識のズレを防ぐため、着手前のヒアリングを丁寧に行います
 ・進捗はこまめにご連絡し、ご返信は原則24時間以内にいたします
@@ -231,6 +239,11 @@ PROPOSAL_TEMPLATE_QUOTE = """はじめまして。Web制作を専門にしてお
 3. デザイン・構成案のご提示
 4. 制作・実装
 5. テスト・最終確認・納品
+
+【初めてのお取引について】
+クラウドワークスでの活動を始めたばかりのため、評価はまだ多くありません。
+その分、1件1件に時間をかけて丁寧に対応いたします。
+制作サンプルや事前のやり取りでご判断いただけましたら幸いです。
 
 【対応にあたって大切にしていること】
 ・認識のズレを防ぐため、着手前のヒアリングを丁寧に行います
@@ -295,6 +308,7 @@ def find_candidates(
     7/19付など3週間以上前のものを含め131件が未チェックのまま滞留していた）。
     呼び出し側でこの行番号一覧を使ってステータスを更新し、無限再評価を止める。
     """
+    recheck_since = (date.today() - timedelta(days=RECHECK_BELOW_BUDGET_DAYS)).strftime("%Y-%m-%d")
     candidates = []
     below_budget_rows: list[int] = []
     excluded_keyword_rows: list[int] = []
@@ -302,7 +316,14 @@ def find_candidates(
         category = r.get("カテゴリ")
         if category not in target_categories:
             continue
-        if r.get("ステータス") != "未チェック":
+        status = r.get("ステータス")
+        if status == BELOW_BUDGET_STATUS:
+            # 最低予算を下げた時、以前「予算未達」にした新しい案件も拾い直す
+            # （2026-10-08、25000→15000に下げた際に追加）
+            budget = parse_budget_yen(r.get("予算", ""))
+            if budget is None or budget < min_budget_yen or (r.get("検出日") or "") < recheck_since:
+                continue
+        elif status != "未チェック":
             continue
         title = r.get("タイトル", "")
         if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):

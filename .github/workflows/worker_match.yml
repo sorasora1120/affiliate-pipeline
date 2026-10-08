@@ -59,7 +59,9 @@ jobs:
           # 受けて対象を広げる）。タイトルマッチのみで本文は見ないisExcludedと違い、
           # こちらは金額で機械的に切るだけなので、下げすぎると割に合わない案件まで
           # 通知が増える点は留意）。
-          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '25000' }}
+          # 2026-10-08、25000→15000。評価0件のうちは大きい案件より小さい修正・LP案件の
+          # 方が採用されやすく、最初の評価を取ることを優先する（手数料を引いても利益は残る）
+          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '15000' }}
           WORKER_MATCH_MARGIN_PERCENT: ${{ vars.WORKER_MATCH_MARGIN_PERCENT || '20' }}
           WORKER_MATCH_MARGIN_MIN_YEN: ${{ vars.WORKER_MATCH_MARGIN_MIN_YEN || '3000' }}
           WORKER_MATCH_MARGIN_MAX_YEN: ${{ vars.WORKER_MATCH_MARGIN_MAX_YEN || '30000' }}

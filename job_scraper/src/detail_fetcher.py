@@ -4,15 +4,21 @@
 ココナラ（「募集者情報」セクション）とCrowdWorks（「クライアント情報」セクション）の
 両方に対応。それ以外の未対応URLは client_name="不明" を返す。
 
-注意: CrowdWorksはクラウドの共有IPから403で弾かれる（robots.txtでもClaudeBotを
-名指しで拒否している）ため、このモジュールはCrowdWorksの案件収集と同じ
-ローカルPC実行の文脈（main.pyのcrowdworks経路）でのみ呼び出すこと。
+注意: CrowdWorksは実行環境のIPによって403で弾かれることがあるため、
+CrowdWorksの検索が通った実行（main.pyのcrowdworks経路）の中でだけ呼び出すこと。
 """
 import logging
+import re
 
 from playwright.sync_api import sync_playwright
 
 logger = logging.getLogger(__name__)
+
+# CrowdWorksの案件ページの「応募状況」欄（例: 「応募した人 12 人」）。
+# 2026-10-07、応募49件で採用0件だったため追加。評価0件のアカウントは
+# 応募者が多い案件ではまず選ばれないので、ライバルが少ない案件を優先できるよう
+# 応募者数をシートに残す（Dispatchビューアで並び替え・表示に使う）。
+_CW_APPLICANTS_RE = re.compile(r"応募した人\s*(\d+)\s*人")
 
 
 def _parse_coconala(text: str) -> dict:
@@ -94,6 +100,10 @@ def fetch_client_info(urls: list[str]) -> dict[str, dict]:
                     heading = page.get_by_text(heading_text, exact=True).first
                     text = heading.locator(xpath).inner_text(timeout=5_000)
                     info = parser(text)
+                    if parser is _parse_crowdworks:
+                        m = _CW_APPLICANTS_RE.search(page.locator("body").inner_text(timeout=5_000))
+                        if m:
+                            info["applicants"] = m.group(1)
                 except Exception as exc:
                     logger.warning("クライアント情報取得失敗 (%s): %s", url, exc)
             results[url] = info
