@@ -71,9 +71,9 @@ BELOW_BUDGET_STATUS = "対象外（予算未達）"
 RECHECK_BELOW_BUDGET_DAYS = 3
 EXCLUDED_KEYWORD_STATUS = "対象外（除外キーワード）"
 
-# 制作サンプル（dispatch-viewerリポジトリのworks/、GitHub Pagesで公開）。どれも
+# 制作サンプル（sorasora1120.github.ioリポジトリ、GitHub Pagesで公開）。どれも
 # 架空の店舗・事務所であることをページ上に明記している。
-PORTFOLIO_BASE_URL = "https://sorasora1120.github.io/dispatch-viewer/works/"
+PORTFOLIO_BASE_URL = "https://sorasora1120.github.io/"
 _SAMPLES = {
     "salon": ("美容室サイト", "salon.html"),
     "accounting": ("会計事務所コーポレートサイト", "accounting.html"),
