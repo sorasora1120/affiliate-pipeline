@@ -23,6 +23,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+
+      # config.py（dotenv）とexpiry_checker.py（playwright）をimportするテストがあるため、
+      # 依存パッケージを入れておく（ブラウザ本体は不要なのでplaywright installはしない）
+      - name: 依存パッケージをインストール
+        working-directory: job_scraper
+        run: pip install -r requirements.txt
 
       - name: テストを実行
         working-directory: job_scraper
