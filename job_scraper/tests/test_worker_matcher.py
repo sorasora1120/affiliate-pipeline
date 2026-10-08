@@ -192,3 +192,9 @@ class RelevantTitleWeakWordTest(unittest.TestCase):
         self.assertTrue(is_relevant_title("LP1枚"))
         self.assertTrue(is_relevant_title("Shopifyのお手伝い"))
 
+    def test_netshop_needs_a_work_word(self):
+        from src.worker_matcher import is_relevant_title
+        self.assertFalse(is_relevant_title("ネットショップ集客"))
+        self.assertTrue(is_relevant_title("ネットショップを作りたいです"))
+        self.assertTrue(is_relevant_title("ネットショップ開設のお手伝い"))
+
