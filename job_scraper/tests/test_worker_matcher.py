@@ -128,11 +128,11 @@ class PickIdeasTest(unittest.TestCase):
         from src.worker_matcher import pick_ideas
         ideas = pick_ideas("shop", "インスタと連携して、LINEで予約を受けたいです")
         self.assertEqual(len(ideas), 3)
-        self.assertIn("Instagram", ideas[0])
-        self.assertIn("LINE", ideas[1])
+        self.assertIn("インスタ", ideas[0][0])
+        self.assertIn("LINE", ideas[1][1])
 
     def test_ignores_line_inside_other_words_and_applicant_conditions(self):
-        from src.worker_matcher import pick_ideas, _TYPE_TEXT
+        from src.worker_matcher import pick_ideas, _PITCH
         ideas = pick_ideas("corporate", "Online meeting OK. deadline is flexible. 海外在住の方も歓迎です")
-        self.assertEqual(ideas, _TYPE_TEXT["corporate"]["ideas"])
+        self.assertEqual(ideas, _PITCH["corporate"]["ideas"])
 
