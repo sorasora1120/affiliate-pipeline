@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./client_secrets.json)",
+      "Read(./studio.youtube.com_cookies.txt)"
+    ]
+  }
+}
