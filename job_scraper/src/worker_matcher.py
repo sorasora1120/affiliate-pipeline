@@ -80,6 +80,16 @@ _SAMPLES = {
     "cafe": ("カフェのLP", "cafe.html"),
 }
 
+# 連携しているワーカー（海外のデザイナー・エンジニア）がこれまでに制作したサイト。
+# 提案文では「チームの実績」として載せ、ソラ本人の制作とは書かない（2026-10-08）。
+TEAM_WORKS = [
+    "https://gipsyqueens.com/",
+    "https://maribelli-shop.com/",
+    "https://havocpowersports.com/",
+    "https://golfcarsofarizona.com/",
+    "https://www.skyfoxtech.com/",
+]
+
 # 2026-10-07、応募49件で採用0件だったため、どの案件にも同じ文面だった提案文を
 # 案件の種類ごとに書き分け、制作サンプルへのリンクと事前確認の質問を入れた。
 # 「募集を読んだうえで書いている」と伝わる具体的な一文と質問が無いと、
@@ -166,6 +176,7 @@ def _tailored_parts(title: str) -> dict:
         "point": spec["point"],
         "samples": samples,
         "portfolio": PORTFOLIO_BASE_URL,
+        "team_works": "\n".join(f"・{u}" for u in TEAM_WORKS),
         "questions": "\n".join(f"・{q}" for q in spec["questions"]),
     }
 
@@ -180,6 +191,10 @@ PROPOSAL_TEMPLATE = """はじめまして。Web制作を専門にしておりま
 {samples}
 （その他のサンプル: {portfolio}）
 ※スマホ・タブレットでもご確認いただけます
+
+【チームの制作実績】
+連携しているデザイナー・エンジニアが、これまでに海外向けに制作したサイトの一部です。
+{team_works}
 
 【お見積り】
 ・{title}: {amount:,}円一式
@@ -224,6 +239,10 @@ PROPOSAL_TEMPLATE_QUOTE = """はじめまして。Web制作を専門にしてお
 {samples}
 （その他のサンプル: {portfolio}）
 ※スマホ・タブレットでもご確認いただけます
+
+【チームの制作実績】
+連携しているデザイナー・エンジニアが、これまでに海外向けに制作したサイトの一部です。
+{team_works}
 
 【お見積りについて】
 ご予算の記載がなかったため、同規模の案件を参考に、目安として
