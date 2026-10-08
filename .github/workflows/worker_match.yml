@@ -7,7 +7,7 @@ on:
   # 収集はCrowdWorksに拒否された時のやり直しやGitHub側の遅れで終わる時刻が
   # 読めず、収集前にマッチングが走って新着を次の回まで取りこぼすことがあったため。
   workflow_run:
-    workflows: ["案件収集パイプライン（CrowdWorks）"]
+    workflows: ["案件収集パイプライン（CrowdWorks）", "新着チェック（1時間ごと・CrowdWorks）"]
     types: [completed]
   workflow_dispatch:
 
@@ -60,12 +60,16 @@ jobs:
           # 通知が増える点は留意）。
           # 2026-10-08、25000→15000。評価0件のうちは大きい案件より小さい修正・LP案件の
           # 方が採用されやすく、最初の評価を取ることを優先する（手数料を引いても利益は残る）
-          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '15000' }}
+          # 2026-10-08、15000→5000。返信が少ない（200件で3件）ため、評価0のうちは修正・更新などの
+          # 小さい仕事で最初の評価を取る。小さい案件でもワーカーに渡す額が残るよう、利益の下限も3000→1000
+          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '5000' }}
           WORKER_MATCH_MARGIN_PERCENT: ${{ vars.WORKER_MATCH_MARGIN_PERCENT || '20' }}
-          WORKER_MATCH_MARGIN_MIN_YEN: ${{ vars.WORKER_MATCH_MARGIN_MIN_YEN || '3000' }}
+          WORKER_MATCH_MARGIN_MIN_YEN: ${{ vars.WORKER_MATCH_MARGIN_MIN_YEN || '1000' }}
           WORKER_MATCH_MARGIN_MAX_YEN: ${{ vars.WORKER_MATCH_MARGIN_MAX_YEN || '30000' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+          # 1時間ごとの新着チェックの後は「候補なし」を送らない（毎時届くと埋もれるため）
+          QUIET: ${{ github.event.workflow_run.name == '新着チェック（1時間ごと・CrowdWorks）' && '1' || '0' }}
         run: python worker_match_main.py

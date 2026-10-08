@@ -5,6 +5,15 @@ name: CrowdWorks案件収集（1回分の試行）
 # 呼び出し側が別のランナーでこのワークフローをもう一度呼ぶ。
 on:
   workflow_call:
+    inputs:
+      # 1時間ごとの新着チェックでは1ページ目だけ見る（空なら PAGES_PER_KEYWORD の設定どおり）
+      pages:
+        type: string
+        default: ""
+      # "1" なら「新着なし」や件数の要約をDiscordに送らない
+      quiet:
+        type: string
+        default: "0"
     outputs:
       blocked:
         value: ${{ jobs.scrape.outputs.blocked }}
@@ -50,7 +59,8 @@ jobs:
           # dispatch-viewer/index.htmlのWORKER_MATCH_CATEGORIESも必ず同じ内容に揃えること。
           JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築,STUDIO制作,ペライチ制作,Wix制作,ホームページ改修,ホームページリニューアル,コーポレートサイト作成,採用サイト制作,オウンドメディア構築,ネットショップ開設' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '40' }}
-          PAGES_PER_KEYWORD: ${{ vars.PAGES_PER_KEYWORD || '3' }}
+          PAGES_PER_KEYWORD: ${{ inputs.pages != '' && inputs.pages || vars.PAGES_PER_KEYWORD || '3' }}
+          QUIET: ${{ inputs.quiet }}
           REQUEST_INTERVAL_SECONDS: ${{ vars.REQUEST_INTERVAL_SECONDS || '3' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_WORKSHEET_NAME: ${{ vars.JOB_WORKSHEET_NAME || '案件一覧' }}

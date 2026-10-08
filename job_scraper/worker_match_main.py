@@ -13,6 +13,7 @@
   3. 通知した案件はステータスを「提案済み」に更新し、次回以降は対象外にする
 """
 import logging
+import os
 import sys
 
 import config
@@ -101,6 +102,8 @@ def _run_locked() -> None:
                 desc = page_info.get(c["row"], {}).get("description")
                 if desc:
                     c["description"] = desc
+                if c["row"] in page_info:
+                    c["applicants"] = page_info[c["row"]].get("applicants")
         if closed_rows:
             closed_set = set(closed_rows)
             updates = [{"range": f"A{row}", "values": [[CLOSED_STATUS]]} for row in closed_rows]
@@ -144,7 +147,8 @@ def _run_locked() -> None:
             logger.warning("除外キーワード行の一括更新に失敗しました: %s", exc)
 
     if not candidates:
-        notify_discord("ワーカーに提案できる新規案件はありませんでした。")
+        if os.getenv("QUIET") != "1":
+            notify_discord("ワーカーに提案できる新規案件はありませんでした。")
         return
 
     sent = 0
@@ -172,6 +176,32 @@ def _run_locked() -> None:
             logger.warning("案件の通知に失敗しました (row=%s): %s", c.get("row"), exc)
 
     logger.info("%d/%d件を「%s」に更新しました", sent, len(candidates), PROPOSED_STATUS)
+    _notify_hot(candidates)
+
+
+# 応募者がこの人数以下の新着は「今すぐ応募」として別に知らせる（2026-10-08）。
+# 200件送って返信3件だったため、募集が出てすぐ・応募者が少ないうちに出せるようにする
+HOT_MAX_APPLICANTS = 5
+
+
+def _notify_hot(candidates: list[dict]) -> None:
+    hot = []
+    for c in candidates:
+        try:
+            n = int(str(c.get("applicants", "")).strip())
+        except ValueError:
+            continue
+        if n <= HOT_MAX_APPLICANTS:
+            hot.append((n, c))
+    if not hot:
+        return
+    hot.sort(key=lambda x: x[0])
+    lines = [f"🔥 今すぐ応募したい新着 {len(hot)}件（応募者が少ない順）"]
+    for n, c in hot[:10]:
+        amount = f"{c['amount']:,}円" if c.get("amount") else "予算は見積り希望"
+        lines.append(f"・応募{n}人｜{c['title']}｜{amount}\n  {c['url']}")
+    lines.append("ビューアの「送れる案件」から提案文をコピーして応募してね")
+    notify_discord("\n".join(lines))
 
 
 def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:

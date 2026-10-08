@@ -110,8 +110,12 @@ def run() -> None:
         except Exception as exc:
             notify_error(exc, "関連案件の取得に失敗しました（新着案件の通知は続行します）")
 
+    # 1時間ごとの新着チェック（QUIET=1）では「新着なし」や件数の要約は送らない。
+    # 毎時届くとDiscordが埋まり、本当に見てほしい「🔥今すぐ応募」の通知が埋もれるため（2026-10-08）
+    quiet = os.getenv("QUIET") == "1"
     if not new_jobs:
-        notify_discord("新着案件はありませんでした。")
+        if not quiet:
+            notify_discord("新着案件はありませんでした。")
         return
 
     # ワーカーマッチング対象になりうる案件だけ、依頼者情報を先に取得しておく
@@ -156,7 +160,8 @@ def run() -> None:
         f"うちカテゴリだけ見て対象になりうる件数: {len(info_targets)}件（予算・除外条件はこの後のワーカーマッチングで判定）",
         "詳細・提案文はスプレッドシートを確認してください。",
     ]
-    notify_discord("\n".join(lines))
+    if not quiet:
+        notify_discord("\n".join(lines))
 
 
 if __name__ == "__main__":
