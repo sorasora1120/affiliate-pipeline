@@ -86,3 +86,13 @@ def test_wish_sentence_is_picked_from_description():
     assert pick_wish_sentence(desc) == "ナチュラルで落ち着いた雰囲気にしたいです"
     assert pick_wish_sentence("報酬は3万円です。ご応募お待ちしています。") == ""
     assert pick_wish_sentence("") == ""
+
+
+def test_wish_sentence_skips_headings_and_self_intro():
+    from src.worker_matcher import pick_wish_sentence
+
+    assert pick_wish_sentence("【お願いしたい内容】\nお問い合わせページ\n") == ""
+    assert pick_wish_sentence("当方は企業様の集客支援を行っている営業会社です。") == ""
+    assert pick_wish_sentence("店舗用とEC用で残高が分断される構成は、目的を満たしません。") == ""
+    desc = "【依頼の目的・背景】\n特にスマートフォンでの閲覧を重視した設計を希望します。\n"
+    assert pick_wish_sentence(desc) == "特にスマートフォンでの閲覧を重視した設計を希望します"
