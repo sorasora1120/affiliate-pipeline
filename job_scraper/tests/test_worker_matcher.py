@@ -128,8 +128,8 @@ class PickIdeasTest(unittest.TestCase):
         from src.worker_matcher import pick_ideas
         ideas = pick_ideas("shop", "インスタと連携して、LINEで予約を受けたいです")
         self.assertEqual(len(ideas), 3)
-        self.assertIn("インスタ", ideas[0][0])
-        self.assertIn("LINE", ideas[1][1])
+        self.assertIn("インスタ", ideas[0])
+        self.assertIn("LINE", ideas[1])
 
     def test_ignores_line_inside_other_words_and_applicant_conditions(self):
         from src.worker_matcher import pick_ideas, _PITCH
@@ -175,4 +175,20 @@ class QuoteBudgetTest(unittest.TestCase):
         self.assertEqual(cands[0]["amount"], 5000)
         cands, below, _ = find_candidates([_row(予算="1,000円 〜 4,000円")], CATEGORIES, EXCLUDE, 5000, 20, 1000, 30000)
         self.assertEqual(cands, [])
+
+
+class RelevantTitleWeakWordTest(unittest.TestCase):
+    def test_site_only_titles_need_a_work_word(self):
+        from src.worker_matcher import is_relevant_title
+        self.assertFalse(is_relevant_title("SNS版ポータルサイトに出演してくださる女性の方を募集します。"))
+        self.assertFalse(is_relevant_title("サイト運営スタッフ募集"))
+        self.assertTrue(is_relevant_title("ポータルサイト制作"))
+        self.assertTrue(is_relevant_title("ECサイトの構築をお願いします"))
+        self.assertTrue(is_relevant_title("Webデザインのご依頼"))
+
+    def test_strong_words_pass_alone(self):
+        from src.worker_matcher import is_relevant_title
+        self.assertTrue(is_relevant_title("ホームページをお願いします"))
+        self.assertTrue(is_relevant_title("LP1枚"))
+        self.assertTrue(is_relevant_title("Shopifyのお手伝い"))
 

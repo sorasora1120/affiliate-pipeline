@@ -90,13 +90,14 @@ def applicants_band(text: str) -> str:
 
 
 def summarize(rows: list[dict], today: str) -> dict:
-    s = {"pool": 0, "new_today": 0, "applied": 0, "replied": 0, "hired": 0,
+    s = {"pool": 0, "new_today": 0, "applied": 0, "replied": 0, "hired": 0, "pool_titles": [],
          "by_type": defaultdict(lambda: [0, 0]), "by_budget": defaultdict(lambda: [0, 0]),
          "by_applicants": defaultdict(lambda: [0, 0])}
     for r in rows:
         stage = r["stage"].strip()
         if r["status"] == "提案済み" and stage in ("", "new"):
             s["pool"] += 1
+            s["pool_titles"].append(r["title"])
             if r["date"].startswith(today):
                 s["new_today"] += 1
         if stage not in APPLIED:
@@ -143,6 +144,8 @@ def main() -> None:
     print(f"::notice title=種類別の返信率::{breakdown(s['by_type'])}")
     print(f"::notice title=予算別の返信率::{breakdown(s['by_budget'])}")
     print(f"::notice title=応募者数別の返信率::{breakdown(s['by_applicants'])}")
+    # 変な案件が混ざっていないか、Claudeの定期チェックで目で確かめるため（新しい順に最大60件）
+    print(f"::notice title=送れる案件のタイトル::{' / '.join(reversed(s['pool_titles'][-60:]))}")
     if os.getenv("SEND_DISCORD") == "1":
         from src.notifier import notify_discord
         notify_discord(discord_message(s, today))
