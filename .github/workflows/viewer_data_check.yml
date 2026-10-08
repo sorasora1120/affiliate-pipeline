@@ -1,0 +1,52 @@
+name: ビューアの通信量チェック（一時）
+
+# 2026-10-08、「データくう？」との質問を受けて、ビューアが開くたびに読み込む量を実際に測る。
+# 全部読む今のやり方と、必要な行・列だけ読むやり方を比べ、件数が一致するかも確かめる。
+on:
+  workflow_dispatch:
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 測る
+        run: |
+          python3 - <<'EOF'
+          import gzip, json, urllib.parse, urllib.request
+          from collections import Counter
+          SHEET = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
+          TQ = "select A,B,C,D,E,F,G,H,J,K,L,M,N,O,P,Q,R,S where A = '提案済み' or A = '未チェック' or R != ''"
+
+          def fetch(tq=None):
+              q = {"tqx": "out:json", "sheet": "案件一覧"}
+              if tq:
+                  q["tq"] = tq
+              url = f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?" + urllib.parse.urlencode(q)
+              req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip", "User-Agent": "Mozilla/5.0"})
+              raw = urllib.request.urlopen(req, timeout=60).read()
+              body = gzip.decompress(raw) if raw[:2] == b"\x1f\x8b" else raw
+              text = body.decode("utf-8")
+              data = json.loads(text[text.index("(") + 1:text.rindex(")")])
+              return len(raw), len(body), data
+
+          def val(c):
+              if c is None:
+                  return ""
+              if c.get("f") is not None:
+                  return c["f"]
+              return "" if c.get("v") is None else c["v"]
+
+          w1, b1, full = fetch()
+          rows = [[val(c) for c in (r.get("c") or [])] for r in full["table"]["rows"]]
+          status = Counter(r[0] for r in rows)
+          expected = sum(1 for r in rows if r[0] in ("提案済み", "未チェック") or (len(r) > 17 and str(r[17]).strip()))
+          w2, b2, part = fetch(TQ)
+          if part.get("status") == "error":
+              print(f"::error title=絞り込みクエリが失敗::{json.dumps(part.get('errors'), ensure_ascii=False)}")
+          got = len(part["table"]["rows"]) if "table" in part else -1
+          ncols = len(part["table"]["cols"]) if "table" in part else -1
+          print(f"::notice title=全部読む（今）::通信 {w1/1024:.0f}KB（展開後 {b1/1024:.0f}KB）・{len(rows)}行・{len(full['table']['cols'])}列")
+          print(f"::notice title=必要な分だけ::通信 {w2/1024:.0f}KB（展開後 {b2/1024:.0f}KB）・{got}行・{ncols}列・期待{expected}行")
+          print(f"::notice title=ステータス内訳::{json.dumps(status.most_common(12), ensure_ascii=False)}")
+          EOF
