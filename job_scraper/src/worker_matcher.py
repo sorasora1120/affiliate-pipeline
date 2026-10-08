@@ -24,10 +24,11 @@ from .budget_utils import parse_budget_yen
 _RELEVANT_WORDS_JA = [
     "サイト", "ホームページ", "ランディング", "ネットショップ", "通販",
     "ワードプレス", "ペライチ", "ウェブ", "オウンドメディア", "ページ制作", "ページ作成",
+    "コーディング",  # 2026-10-08、HTML/LPコーディングの案件を拾うため
 ]
 # 英字の短い語は単語の一部（"project"の"ec"等）に誤一致しないよう、前後が英字でない
 # ことを条件にする。全角英字はNFKC正規化で半角にそろえてから判定する。
-_RELEVANT_WORDS_LATIN = ["hp", "lp", "ec", "web", "shopify", "wordpress", "studio", "wix"]
+_RELEVANT_WORDS_LATIN = ["hp", "lp", "ec", "web", "shopify", "wordpress", "studio", "wix", "html"]
 
 
 def _normalize(title: str) -> str:
@@ -360,6 +361,25 @@ _IDEA_EXTRAS: list[tuple[list[str], tuple[str, str]]] = [
     (["スマホ"], ("スマホの人は、指が届く画面の下半分で操作しています", "大事なボタンは画面の下側に置き、片手でも押しやすくします")),
 ]
 _PLAN_END_WORDS = ("お問い合わせ", "申し込み", "応募フォーム", "予約ボタン")
+
+
+# 募集文にこれがあれば応募しない（2026-10-08、「ちゃんといい案件にして」とのこと）。
+# タダ働き・クラウドワークスの外でのやり取り（規約違反・詐欺の入口）・怪しい勧誘のサイン。
+_RED_FLAGS: list[tuple[str, list[str]]] = [
+    ("報酬なし・成果報酬", ["成果報酬", "無報酬", "無償", "報酬なし", "ボランティア"]),
+    ("クラウドワークスの外でのやり取り", ["line交換", "lineでのやり取り", "lineでやり取り", "直接取引", "直接契約",
+                              "クラウドワークス外", "外部ツールでの連絡", "メールアドレスを教えて"]),
+    ("怪しい勧誘", ["登録料", "初期費用", "教材費", "情報商材", "高収入", "誰でも簡単", "スキル不要で稼"]),
+]
+
+
+def red_flag(description: str) -> str:
+    """危ないサインがあれば、その理由を返す（なければ空文字）。"""
+    desc = _normalize(description).replace(" ", "")
+    for reason, words in _RED_FLAGS:
+        if any(w in desc for w in words):
+            return reason
+    return ""
 
 
 def adapt_plan(plan: str, description: str) -> tuple[str, list[str]]:

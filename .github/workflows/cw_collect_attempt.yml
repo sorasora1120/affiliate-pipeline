@@ -57,7 +57,7 @@ jobs:
           # （2026-08-27にActions利用上限超過で頻度を減らした反省を踏まえ、同時に
           # 増やさない）。worker_match.ymlのWORKER_MATCH_CATEGORIESと
           # dispatch-viewer/index.htmlのWORKER_MATCH_CATEGORIESも必ず同じ内容に揃えること。
-          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築,STUDIO制作,ペライチ制作,Wix制作,ホームページ改修,ホームページリニューアル,コーポレートサイト作成,採用サイト制作,オウンドメディア構築,ネットショップ開設' }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS || 'サイト制作,ホームページ制作,ECサイト構築,ECサイト制作,ネットショップ構築,ネットショップ,Shopify,コーポレートサイト制作,LP制作,ランディングページ制作,サイトリニューアル,Web制作,ホームページ作成,LP作成,ランディングページ作成,ネットショップ制作,WordPress制作,WordPress構築,STUDIO制作,ペライチ制作,Wix制作,ホームページ改修,ホームページリニューアル,コーポレートサイト作成,採用サイト制作,オウンドメディア構築,ネットショップ開設,ホームページ修正,WordPress修正,サイト修正,LP修正,Shopifyカスタマイズ,ホームページ更新,HTMLコーディング,LPコーディング,レスポンシブ対応,Webデザイン' }}
           MAX_JOBS_PER_KEYWORD: ${{ vars.MAX_JOBS_PER_KEYWORD || '40' }}
           PAGES_PER_KEYWORD: ${{ inputs.pages != '' && inputs.pages || vars.PAGES_PER_KEYWORD || '3' }}
           QUIET: ${{ inputs.quiet }}

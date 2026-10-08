@@ -21,6 +21,7 @@ from src import sheet_lock
 from src.expiry_checker import CLOSED_STATUS, find_closed_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
+from src.worker_matcher import red_flag
 from src.worker_matcher import (
     BELOW_BUDGET_STATUS,
     EXCLUDED_KEYWORD_STATUS,
@@ -104,6 +105,17 @@ def _run_locked() -> None:
                     c["description"] = desc
                 if c["row"] in page_info:
                     c["applicants"] = page_info[c["row"]].get("applicants")
+        flagged = [(c["row"], red_flag(c.get("description", ""))) for c in candidates]
+        flagged = [(row, why) for row, why in flagged if why]
+        if flagged:
+            sheet.worksheet.batch_update(
+                [{"range": f"A{row}", "values": [[RED_FLAG_STATUS]]} for row, _ in flagged],
+                value_input_option="RAW",
+            )
+            for row, why in flagged:
+                logger.info("要注意の案件を外しました row=%s（%s）", row, why)
+            flagged_set = {row for row, _ in flagged}
+            candidates = [c for c in candidates if c["row"] not in flagged_set]
         if closed_rows:
             closed_set = set(closed_rows)
             updates = [{"range": f"A{row}", "values": [[CLOSED_STATUS]]} for row in closed_rows]
@@ -177,6 +189,10 @@ def _run_locked() -> None:
 
     logger.info("%d/%d件を「%s」に更新しました", sent, len(candidates), PROPOSED_STATUS)
     _notify_hot(candidates)
+
+
+# 募集文に危ないサイン（成果報酬・外部でのやり取り・怪しい勧誘）があった案件のステータス
+RED_FLAG_STATUS = "対象外（要注意）"
 
 
 # 応募者がこの人数以下の新着は「今すぐ応募」として別に知らせる（2026-10-08）。

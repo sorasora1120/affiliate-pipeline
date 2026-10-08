@@ -136,3 +136,22 @@ class PickIdeasTest(unittest.TestCase):
         ideas = pick_ideas("corporate", "Online meeting OK. deadline is flexible. 海外在住の方も歓迎です")
         self.assertEqual(ideas, _PITCH["corporate"]["ideas"])
 
+
+class RedFlagTest(unittest.TestCase):
+    def test_flags_unpaid_and_off_platform(self):
+        from src.worker_matcher import red_flag
+        self.assertEqual(red_flag("報酬は成果報酬となります"), "報酬なし・成果報酬")
+        self.assertEqual(red_flag("詳細はLINE交換のうえお伝えします"), "クラウドワークスの外でのやり取り")
+        self.assertEqual(red_flag("初期費用として3万円が必要です"), "怪しい勧誘")
+
+    def test_normal_job_is_not_flagged(self):
+        from src.worker_matcher import red_flag
+        self.assertEqual(red_flag("美容室のホームページを作りたいです。LINE予約のボタンも付けてください。"), "")
+
+
+class RelevantTitleTest(unittest.TestCase):
+    def test_coding_jobs_are_relevant(self):
+        from src.worker_matcher import is_relevant_title
+        self.assertTrue(is_relevant_title("HTML/CSSのコーディングをお願いします"))
+        self.assertTrue(is_relevant_title("HTMLの修正依頼"))
+
