@@ -122,3 +122,17 @@ class AdaptPlanTest(unittest.TestCase):
         out, added = adapt_plan(plan, "料金表とネット予約、地図を入れてください")
         self.assertEqual(added, [])
 
+
+class PickIdeasTest(unittest.TestCase):
+    def test_uses_description_specific_ideas_first(self):
+        from src.worker_matcher import pick_ideas
+        ideas = pick_ideas("shop", "インスタと連携して、LINEで予約を受けたいです")
+        self.assertEqual(len(ideas), 3)
+        self.assertIn("Instagram", ideas[0])
+        self.assertIn("LINE", ideas[1])
+
+    def test_ignores_line_inside_other_words_and_applicant_conditions(self):
+        from src.worker_matcher import pick_ideas, _TYPE_TEXT
+        ideas = pick_ideas("corporate", "Online meeting OK. deadline is flexible. 海外在住の方も歓迎です")
+        self.assertEqual(ideas, _TYPE_TEXT["corporate"]["ideas"])
+
