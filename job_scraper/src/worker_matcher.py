@@ -215,7 +215,7 @@ def pick_wish_sentence(description: str) -> str:
         if "【" in raw or "】" in raw:
             continue  # 見出し行
         # 先頭の記号・絵文字などを取り除く
-        sent = re.sub(r"^[^0-9A-Za-z０-９Ａ-Ｚａ-ｚ\u3040-\u30ff\u4e00-\u9fff]+", "", raw).strip()
+        sent = re.sub(r"^[^0-9A-Za-z０-９Ａ-Ｚａ-ｚ\u3041-\u3096\u30a1-\u30fa\u30fc\u4e00-\u9fff]+", "", raw).strip()
         sent = re.sub(r"^[0-9０-９]+[.．)）、]\s*", "", sent)  # 「1.」などの番号
         sent = re.sub(r"\s+", " ", sent).rstrip("、,")
         if sent.endswith(("ており", "ので", "ため", "て", "し", "が")):
