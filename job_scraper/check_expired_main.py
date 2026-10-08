@@ -89,7 +89,15 @@ def _run_locked() -> None:
         logger.info("チェック対象がありませんでした")
         return
 
-    closed_rows, deadlines = find_closed_rows(url_rows)
+    applicants: dict[int, str] = {}
+    closed_rows, deadlines = find_closed_rows(url_rows, applicants)
+    if applicants:
+        # 応募者数（S列）を最新の値に更新する。ライバルが少ない案件を優先するため
+        sheet.worksheet.batch_update(
+            [{"range": f"S{row}", "values": [[n]]} for row, n in applicants.items()],
+            value_input_option="RAW",
+        )
+        logger.info("%d件の応募者数を更新しました", len(applicants))
     logger.info("募集終了: %d/%d件", len(closed_rows), len(url_rows))
 
     if deadlines:
