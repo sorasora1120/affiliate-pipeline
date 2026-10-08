@@ -6,9 +6,10 @@ name: 案件収集パイプライン（CrowdWorks）
 # 1ページ目で打ち切るので、1回あたり1分ほどしか使わない。
 on:
   schedule:
-    # JST 9:00, 17:00, 1:00 の1日3回実行（2026-08-27、GitHub Actionsの利用上限
-    # 超過により全ワークフローが即失敗する事態が発生したため、6回/日→3回/日に削減）
-    - cron: "0 0,8,16 * * *"
+    # JST 8:07 / 13:07 / 19:07 の1日3回（依頼者が投稿しやすい朝・昼・夜）。
+    # 2026-10-08、毎時0分は全世界の定期実行が集中してGitHub側で数時間遅れていた
+    # （16:00 UTC予定が21:01開始）ため、0分を避けて7分にずらした。
+    - cron: "7 23,4,10 * * *"
   workflow_dispatch:   # 手動実行も可能
 
 # 同時実行を防ぐ。定期実行と手動トリガーが重なると、双方が同じexisting_urls()を
@@ -43,3 +44,18 @@ jobs:
     if: ${{ needs.try4.outputs.blocked == 'true' }}
     uses: ./.github/workflows/cw_collect_attempt.yml
     secrets: inherit
+
+  # 5回とも拒否された時だけ知らせる（その回の収集は無し、次の定期実行で再挑戦）
+  notify_blocked:
+    needs: try5
+    if: ${{ needs.try5.outputs.blocked == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Discordに通知
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -sS -H "Content-Type: application/json" -A "Mozilla/5.0" \
+            -d '{"content":"CrowdWorksに5回続けて拒否されたため、今回の案件収集はできませんでした。次の定期実行で自動的に再挑戦します。"}' \
+            "$DISCORD_WEBHOOK_URL"
