@@ -1,3 +1,5 @@
+import unittest
+
 from src.worker_matcher import find_candidates
 
 CATEGORIES = {"サイト制作"}
@@ -96,3 +98,27 @@ def test_wish_sentence_skips_headings_and_self_intro():
     assert pick_wish_sentence("店舗用とEC用で残高が分断される構成は、目的を満たしません。") == ""
     desc = "【依頼の目的・背景】\n特にスマートフォンでの閲覧を重視した設計を希望します。\n"
     assert pick_wish_sentence(desc) == "特にスマートフォンでの閲覧を重視した設計を希望します"
+
+
+class AdaptPlanTest(unittest.TestCase):
+    def test_adds_pages_mentioned_in_description(self):
+        from src.worker_matcher import adapt_plan
+        plan = "トップ → 事業内容 → 会社概要 → お問い合わせ"
+        out, added = adapt_plan(plan, "ブログとよくある質問のページも作ってください。施工事例も載せたいです。")
+        self.assertEqual(added, ["お知らせ・ブログ", "よくある質問", "実績・事例"])
+        self.assertTrue(out.endswith("→ お問い合わせ"))
+
+    def test_ignores_conditions_for_applicants(self):
+        from src.worker_matcher import adapt_plan
+        plan = "トップ → 事業内容 → お問い合わせ"
+        desc = "実績のある方を優先します。採用させていただいた方にはご連絡します。アクセス解析の知識があれば尚可。結果はお知らせください。"
+        out, added = adapt_plan(plan, desc)
+        self.assertEqual(added, [])
+        self.assertEqual(out, plan)
+
+    def test_skips_pages_already_in_plan(self):
+        from src.worker_matcher import adapt_plan
+        plan = "トップ → メニュー・料金 → アクセス → 予約ボタン（どこからでも押せる位置に）"
+        out, added = adapt_plan(plan, "料金表とネット予約、地図を入れてください")
+        self.assertEqual(added, [])
+

@@ -108,7 +108,7 @@ _JOB_TYPES: list[tuple[str, list[str]]] = [
     ("nocode", ["studio", "ペライチ", "wix"]),
     ("recruit", ["採用"]),
     ("renewal", ["リニューアル", "改修", "修正"]),
-    ("shop", ["美容", "サロン", "店舗", "カフェ", "飲食", "クリニック", "整体", "教室"]),
+    ("shop", ["美容", "サロン", "店舗", "カフェ", "飲食", "クリニック", "整体", "整骨", "治療院", "歯科", "教室"]),
     ("corporate", ["コーポレート", "会社", "企業", "事務所", "士業"]),
     ("wordpress", ["wordpress", "ワードプレス"]),
 ]
@@ -245,8 +245,52 @@ def _custom_line(description: str) -> str:
     return f"\n募集文の「{wish}」という点を特に大事にして、構成やデザインをご提案します。"
 
 
+# 募集文に出てくる言葉 → 構成案に足すページ。すでに似たページがあれば足さない（2つ目以降の語で判定）
+_PLAN_EXTRAS: list[tuple[list[str], str, list[str]]] = [
+    # 「実績のある方」「採用させていただいた方」「お知らせください」「アクセス解析」のような
+    # 応募者への条件や連絡の文に反応しないよう、ページを指す言い方だけで判定する
+    (["ブログ", "新着情報", "コラム", "お知らせ欄", "お知らせページ", "お知らせ機能"], "お知らせ・ブログ", ["ブログ", "お知らせ"]),
+    (["採用ページ", "採用情報", "採用サイト", "求人ページ", "リクルート"], "採用情報", ["採用", "仕事内容"]),
+    (["よくある質問", "faq", "q&a"], "よくある質問", ["よくある質問"]),
+    (["お客様の声", "口コミ", "レビュー掲載"], "お客様の声", ["お客様の声", "社員の声"]),
+    (["施工事例", "導入事例", "事例紹介", "実績紹介", "施工例", "作品紹介"], "実績・事例", ["実績", "事例"]),
+    (["料金表", "料金プラン", "料金ページ", "メニュー表"], "料金", ["料金"]),
+    (["アクセスページ", "地図", "マップ", "所在地"], "アクセス", ["アクセス"]),
+    (["ギャラリー"], "ギャラリー", ["ギャラリー"]),
+    (["英語版", "多言語", "英語ページ", "英語対応"], "英語ページ", ["英語"]),
+    (["予約機能", "予約フォーム", "予約システム", "ネット予約", "web予約"], "予約", ["予約"]),
+]
+_PLAN_END_WORDS = ("お問い合わせ", "申し込み", "応募フォーム", "予約ボタン")
+
+
+def adapt_plan(plan: str, description: str) -> tuple[str, list[str]]:
+    """募集文の内容に合わせて構成案にページを足す。足したページ名も返す（提案文で触れるため）。"""
+    if not description:
+        return plan, []
+    desc = _normalize(description)
+    items = plan.split(" → ")
+    added = []
+    for words, page, exists in _PLAN_EXTRAS:
+        if not any(w in desc for w in words):
+            continue
+        if any(e in it for it in items for e in exists):
+            continue
+        # お問い合わせ・申し込みなどの締めのページの手前に入れる
+        pos = len(items)
+        if items and items[-1].startswith(_PLAN_END_WORDS):
+            pos = len(items) - 1
+        items.insert(pos, page)
+        added.append(page)
+        if len(added) >= 3:
+            break
+    return " → ".join(items), added
+
+
 def _tailored_parts(title: str, description: str = "") -> dict:
     spec = _TYPE_TEXT[job_type(title)]
+    plan, added = adapt_plan(spec["plan"], description)
+    if added:
+        plan += "\n（募集内容を拝見して「" + "」「".join(added) + "」を入れています）"
     # 2026-10-08、URLを並べるのをやめてポートフォリオ1本に絞り、「何が見られるか」を書いて開いてもらう形にした
     team = "、".join(re.sub(r"^https?://(www\.)?|/$", "", TEAM_WORKS[k]) for k in spec["team"])
     samples = "・".join(_SAMPLES[k][0] for k in spec["samples"])
@@ -256,7 +300,7 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         "・料金の目安と、ご依頼の流れ",
     ])
     return {
-        "plan": spec["plan"],
+        "plan": plan,
         "point": spec["point"] + _custom_line(description),
         "works": works,
         "portfolio": PORTFOLIO_BASE_URL,
