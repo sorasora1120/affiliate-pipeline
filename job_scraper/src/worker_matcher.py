@@ -238,11 +238,17 @@ def _custom_line(description: str) -> str:
 
 def _tailored_parts(title: str, description: str = "") -> dict:
     spec = _TYPE_TEXT[job_type(title)]
-    works = [f"・{_SAMPLES[k][0]}（制作サンプル）: {PORTFOLIO_BASE_URL}{_SAMPLES[k][1]}" for k in spec["samples"]]
-    works += [f"・{TEAM_WORKS[k]}" for k in spec["team"]]
+    # 2026-10-08、URLを並べるのをやめてポートフォリオ1本に絞り、「何が見られるか」を書いて開いてもらう形にした
+    team = "、".join(re.sub(r"^https?://(www\.)?|/$", "", TEAM_WORKS[k]) for k in spec["team"])
+    samples = "・".join(_SAMPLES[k][0] for k in spec["samples"])
+    works = "\n".join([
+        f"・チームで制作した海外向けサイト{len(TEAM_WORKS)}件（{team} など）",
+        f"・業種別のデザインサンプル（{samples}など、架空の店舗で作ったもの）",
+        "・料金の目安と、ご依頼の流れ",
+    ])
     return {
         "point": spec["point"] + _custom_line(description),
-        "works": "\n".join(works),
+        "works": works,
         "portfolio": PORTFOLIO_BASE_URL,
         "questions": "\n".join(f"・{q}" for q in spec["questions"]),
     }
@@ -253,13 +259,10 @@ _INTRO = """はじめまして、Web制作をしているソラと申します�
 
 {point}
 
-■ ポートフォリオ
+■ まずはポートフォリオをご覧ください
 {portfolio}
-チームの制作実績と業種別のサンプルをまとめています。ぜひ一度ご覧ください。
-
-■ 実績（一部）
-デザイナー・エンジニアと組んだチームで制作しています。
 {works}
+1分ほどで見られますので、雰囲気が合うかどうか、ぜひ先にご確認ください。
 """
 
 _OUTRO = """
@@ -270,7 +273,7 @@ _OUTRO = """
 返信は24時間以内を心がけています。公開後の更新や修正も、月額5,500円〜でお受けできます。
 
 どうぞよろしくお願いいたします。
-ソラ"""
+ソラ（ポートフォリオ：{portfolio}）"""
 
 PROPOSAL_TEMPLATE = _INTRO + """
 ■ お見積り
