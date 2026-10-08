@@ -95,7 +95,6 @@ TEAM_WORKS = {
     "golfcars": "https://golfcarsofarizona.com/",
     "havoc": "https://havocpowersports.com/",
     "malane": "https://malanelighting.com/",
-    "aimabel": "https://aimabel.com/",
     "massinart": "https://massinart.ma/",
 }
 
