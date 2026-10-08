@@ -184,12 +184,50 @@ def job_type(title: str) -> str:
     return "default"
 
 
-def _tailored_parts(title: str) -> dict:
+# 募集文から「依頼者が一番大事にしていそうな一文」を拾い、提案文に一言添える
+# （2026-10-08、「1件ずつ募集文に合わせた一言を最初から書いてほしい」との要望）。
+# 依頼者の希望や目的が書かれていそうな語を含む文を選び、報酬・応募条件など
+# 依頼内容と関係の薄い文は除く。見つからなければ一言は付けない。
+_WANT_WORDS = [
+    "イメージ", "雰囲気", "希望", "重視", "大切", "大事", "こだわ", "目的", "ターゲット",
+    "集客", "予約", "問い合わせ", "問合せ", "売上", "信頼", "おしゃれ", "オシャレ", "シンプル",
+    "高級感", "親しみ", "見やすく", "分かりやすく", "わかりやすく", "伝えたい", "したい", "欲しい", "ほしい",
+]
+_SKIP_WORDS = [
+    "報酬", "予算", "円", "納期", "応募", "契約", "連絡", "経験", "必須", "歓迎", "スキル", "募集",
+    "提案", "注意", "禁止", "http", "www", "クラウドワークス", "ご了承", "メッセージ", "実績", "ポートフォリオ",
+    "質問", "選考", "時給", "稼働", "テストライティング",
+]
+
+
+def pick_wish_sentence(description: str) -> str:
+    if not description:
+        return ""
+    best, best_score = "", 0
+    for raw in re.split(r"[。！？!?\n]", description):
+        sent = re.sub(r"^[\s・■□◆◇●○★☆※\-－—*＊【】\[\]()（）0-9０-９.．、:：]+", "", raw).strip()
+        sent = re.sub(r"\s+", " ", sent)
+        if not 8 <= len(sent) <= 45 or any(w in sent for w in _SKIP_WORDS):
+            continue
+        score = sum(1 for w in _WANT_WORDS if w in sent)
+        if score > best_score:
+            best, best_score = sent, score
+    return best
+
+
+def _custom_line(description: str) -> str:
+    wish = pick_wish_sentence(description)
+    if not wish:
+        return ""
+    return f"\n募集文の「{wish}」という点を特に大事にして、構成やデザインをご提案します。"
+
+
+def _tailored_parts(title: str, description: str = "") -> dict:
     spec = _TYPE_TEXT[job_type(title)]
     works = [f"・{_SAMPLES[k][0]}（制作サンプル）: {PORTFOLIO_BASE_URL}{_SAMPLES[k][1]}" for k in spec["samples"]]
     works += [f"・{TEAM_WORKS[k]}" for k in spec["team"]]
     return {
-        "point": spec["point"],
+        "point": spec["point"] + _custom_line(description),
         "works": "\n".join(works),
         "portfolio": PORTFOLIO_BASE_URL,
         "questions": "\n".join(f"・{q}" for q in spec["questions"]),
@@ -325,6 +363,7 @@ def find_candidates(
             "client_name": r.get("依頼者名") or "不明",
             "rating": r.get("評価") or "",
             "order_count": r.get("実績件数") or "",
+            "description": r.get("募集文") or "",
         }
 
         if parsed_amount is None:
@@ -392,7 +431,7 @@ def review_proposed_rows(
             )
             if quote > 0:
                 refreshed.append({
-                    "row": idx, "title": title, "url": r.get("URL"),
+                    "row": idx, "title": title, "url": r.get("URL"), "description": r.get("募集文") or "",
                     "amount": amount, "fee": fee, "margin": margin, "quote": quote,
                 })
             continue
@@ -401,7 +440,7 @@ def review_proposed_rows(
             r.get("プラットフォーム", ""), est_amount, margin_percent, margin_min_yen, margin_max_yen
         )
         refreshed.append({
-            "row": idx, "title": title, "url": r.get("URL"),
+            "row": idx, "title": title, "url": r.get("URL"), "description": r.get("募集文") or "",
             "amount": None, "amount_estimate": est_amount, "fee": est_fee,
             "margin": est_margin, "quote": est_quote,
         })
@@ -413,7 +452,8 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
     Discordのコードブロック整形なしでスプレッドシートにもそのまま書き込める。"""
     if c["amount"] is None:
         proposal = PROPOSAL_TEMPLATE_QUOTE.format(
-            title=c["title"], amount_estimate=c["amount_estimate"], **_tailored_parts(c["title"])
+            title=c["title"], amount_estimate=c["amount_estimate"],
+            **_tailored_parts(c["title"], c.get("description", ""))
         )
         worker_msg = (
             f'Hi! New project: {c["title"]}. '
@@ -423,7 +463,9 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
             f'{c["url"]}'
         )
     else:
-        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"], **_tailored_parts(c["title"]))
+        proposal = PROPOSAL_TEMPLATE.format(
+            title=c["title"], amount=c["amount"], **_tailored_parts(c["title"], c.get("description", ""))
+        )
         worker_msg = (
             f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?\n'
             f'{c["url"]}'

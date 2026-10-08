@@ -19,6 +19,7 @@ from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
 
+from .cw_page import parse_applicants, parse_description
 from .deadline_utils import normalize_deadline
 
 logger = logging.getLogger(__name__)
@@ -79,19 +80,18 @@ def find_stale_rows(rows: list[dict], platforms: set[str], today: date | None = 
     return stale_rows
 
 
-# CrowdWorksの「応募した人 N 人」。開いたついでに最新の応募者数も取る（2026-10-08）
-_CW_APPLICANTS_RE = re.compile(r"応募した人\s*(\d+)\s*人")
 
 
 def find_closed_rows(
-    url_rows: list[tuple[int, str]], applicants_out: dict[int, str] | None = None
+    url_rows: list[tuple[int, str]], page_info_out: dict[int, dict] | None = None
 ) -> tuple[list[int], dict[int, str]]:
     """[(行番号, URL), ...] を受け取り、(募集終了と判定した行番号のリスト, {行番号: 締切}) を返す。
 
     締切は、詳細ページを開いたその日を基準に絶対日付へ正規化して返す
     （収集時点ではなく、いま開いて分かった残り日数のため）。既に募集終了と
     判定した行は締切を取り直す意味がないので対象に含めない。
-    applicants_outを渡すと、CrowdWorksの応募者数を {行番号: 人数} で書き足す。
+    page_info_outを渡すと、開いたついでにCrowdWorksの最新の応募者数と募集文を
+    {行番号: {"applicants": ..., "description": ...}} で書き足す（2026-10-08）。
     """
     closed_rows: list[int] = []
     deadlines: dict[int, str] = {}
@@ -117,10 +117,11 @@ def find_closed_rows(
                 if any(m in body_text for m in markers):
                     closed_rows.append(row_number)
                     continue
-                if applicants_out is not None and "crowdworks.jp" in url:
-                    m = _CW_APPLICANTS_RE.search(body_text)
-                    if m:
-                        applicants_out[row_number] = m.group(1)
+                if page_info_out is not None and "crowdworks.jp" in url:
+                    page_info_out[row_number] = {
+                        "applicants": parse_applicants(body_text),
+                        "description": parse_description(body_text),
+                    }
                 label = _CW_DEADLINE_LABEL if "crowdworks.jp" in url else _CO_DEADLINE_LABEL
                 label_pos = body_text.find(label)
                 if label_pos != -1:

@@ -8,17 +8,17 @@
 CrowdWorksの検索が通った実行（main.pyのcrowdworks経路）の中でだけ呼び出すこと。
 """
 import logging
-import re
 
 from playwright.sync_api import sync_playwright
 
+from .cw_page import parse_applicants, parse_description
+
 logger = logging.getLogger(__name__)
 
-# CrowdWorksの案件ページの「応募状況」欄（例: 「応募した人 12 人」）。
+# CrowdWorksの案件ページからは、依頼者情報に加えて応募者数と募集文も取る。
 # 2026-10-07、応募49件で採用0件だったため追加。評価0件のアカウントは
-# 応募者が多い案件ではまず選ばれないので、ライバルが少ない案件を優先できるよう
-# 応募者数をシートに残す（Dispatchビューアで並び替え・表示に使う）。
-_CW_APPLICANTS_RE = re.compile(r"応募した人\s*(\d+)\s*人")
+# 応募者が多い案件ではまず選ばれないので応募者数を、提案文に募集文に沿った
+# 一言を入れるために募集文を、それぞれシートに残す。
 
 
 def _parse_coconala(text: str) -> dict:
@@ -101,9 +101,9 @@ def fetch_client_info(urls: list[str]) -> dict[str, dict]:
                     text = heading.locator(xpath).inner_text(timeout=5_000)
                     info = parser(text)
                     if parser is _parse_crowdworks:
-                        m = _CW_APPLICANTS_RE.search(page.locator("body").inner_text(timeout=5_000))
-                        if m:
-                            info["applicants"] = m.group(1)
+                        body = page.locator("body").inner_text(timeout=5_000)
+                        info["applicants"] = parse_applicants(body)
+                        info["description"] = parse_description(body)
                 except Exception as exc:
                     logger.warning("クライアント情報取得失敗 (%s): %s", url, exc)
             results[url] = info

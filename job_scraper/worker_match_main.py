@@ -84,15 +84,22 @@ def _run_locked() -> None:
         # 別工程（check_expired_main.py）が数時間後に確認するまでの間、実際には
         # もう募集終了している案件でも「提案済み」としてそのまま通知・表示され
         # 続けていた。ここで一緒に確認すれば、生きている案件しか提案済みにならない）。
-        applicants: dict[int, str] = {}
-        closed_rows, deadlines = find_closed_rows([(c["row"], c["url"]) for c in candidates], applicants)
-        if applicants:
-            # 応募者数（S列）を最新の値に更新する。ライバルが少ない案件を優先するため
+        page_info: dict[int, dict] = {}
+        closed_rows, deadlines = find_closed_rows([(c["row"], c["url"]) for c in candidates], page_info)
+        if page_info:
+            # 応募者数（S列）と募集文（T列）を最新の値に更新する。募集文は提案文の
+            # 「募集文に沿った一言」に使う（2026-10-08）
             sheet.worksheet.batch_update(
-                [{"range": f"S{row}", "values": [[n]]} for row, n in applicants.items()],
+                [{"range": f"S{row}:T{row}", "values": [[d["applicants"], d["description"]]]}
+                 for row, d in page_info.items()],
                 value_input_option="RAW",
             )
-            logger.info("%d件の応募者数を更新しました", len(applicants))
+            logger.info("%d件の応募者数・募集文を更新しました（募集文あり%d件）", len(page_info),
+                        sum(1 for d in page_info.values() if d["description"]))
+            for c in candidates:
+                desc = page_info.get(c["row"], {}).get("description")
+                if desc:
+                    c["description"] = desc
         if closed_rows:
             closed_set = set(closed_rows)
             updates = [{"range": f"A{row}", "values": [[CLOSED_STATUS]]} for row in closed_rows]

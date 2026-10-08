@@ -72,3 +72,17 @@ def test_profit_is_left_after_platform_fee():
     fee, margin, quote = split_amount("CrowdWorks", 50_000, 20, 3000, 30000)
     assert fee + margin + quote == 50_000
     assert margin == 10_000
+
+
+def test_wish_sentence_is_picked_from_description():
+    from src.worker_matcher import pick_wish_sentence
+
+    desc = (
+        "【概要】\n美容室のホームページ制作をお願いします。\n"
+        "・ナチュラルで落ち着いた雰囲気にしたいです。\n"
+        "・報酬は5万円を予定しています。\n"
+        "・ご応募の際は実績をお送りください。\n"
+    )
+    assert pick_wish_sentence(desc) == "ナチュラルで落ち着いた雰囲気にしたいです"
+    assert pick_wish_sentence("報酬は3万円です。ご応募お待ちしています。") == ""
+    assert pick_wish_sentence("") == ""
