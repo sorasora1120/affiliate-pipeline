@@ -1,7 +1,7 @@
 name: 一時チェック（募集終了の判定）
 
-# 2026-10-09、カテゴリ一覧から集めた案件の多くがすぐ「募集終了」になったため、本当に終わっているのか、
-# 判定の言葉（募集は終了・契約済み など）が開いている案件にも出ていて誤判定しているのかを確かめる。確認後に消す。
+# 2026-10-09、カテゴリ一覧から集めた案件の多くがすぐ「募集終了」になったため、
+# hide_expired=true で募集中だけになるか、カテゴリ一覧のどのリンクが案件一覧の本体かを確かめる。確認後に消す。
 on:
   workflow_dispatch:
 
@@ -21,28 +21,61 @@ jobs:
         working-directory: job_scraper
         run: |
           python3 - <<'EOF'
-          import re, time
+          import json, time
+          from urllib.parse import quote
           from playwright.sync_api import sync_playwright
-          from src.crowdworks_scraper import CrowdWorksScraper
-          sc = CrowdWorksScraper()
+          JS = """() => {
+            const out = [], seen = new Set();
+            for (const a of document.querySelectorAll("a[href*='/public/jobs/']")) {
+              const m = (a.getAttribute("href") || "").match(/\\/public\\/jobs\\/(\\d+)/);
+              const t = (a.innerText || "").trim();
+              if (!m || seen.has(m[1]) || t.length < 3) continue;
+              seen.add(m[1]);
+              const li = a.closest("li");
+              const sur = li ? li.innerText : ((a.parentElement && a.parentElement.parentElement) ? a.parentElement.parentElement.innerText : t);
+              const box = a.closest("main,section,aside,nav,footer,header,ul,ol");
+              out.push({id: +m[1], title: t.slice(0, 40), sur: sur.slice(0, 400),
+                        box: box ? box.tagName + "." + String(box.className || "").slice(0, 25) : "-"});
+            }
+            const heads = [...document.querySelectorAll("h1,h2,h3")].map(h => h.innerText.trim()).filter(Boolean).slice(0, 12);
+            return {jobs: out, heads, labels: [...document.querySelectorAll("label")].map(l => l.innerText.trim()).filter(t => t.includes("募集")).slice(0, 5)};
+          }"""
+          kw = "ホームページ制作"
+          cases = []
+          for cid, label in [("14", "ホームページ制作"), ("15", "Web制作"), ("16", "HTMLコーディング"), ("17", "LP制作"), ("20", "WordPress制作")]:
+              for extra in ["", "&hide_expired=true"]:
+                  cases.append((f"カテゴリ{cid}{'（隠す）' if extra else ''}", f"https://crowdworks.jp/public/jobs/category/{cid}?order=new{extra}", label))
+          for extra in ["", "&hide_expired=true"]:
+              cases.append((f"キーワード{'（隠す）' if extra else ''}", f"https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={quote(kw)}&order=new{extra}", kw))
+          results = []
           with sync_playwright() as pw:
               b = pw.chromium.launch(headless=True)
               pg = b.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36", locale="ja-JP").new_page()
-              pg.set_default_timeout(5000)
-              for base in ["https://crowdworks.jp/public/jobs/category/20?order=new&page=2",
-                           "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D=%E3%83%9B%E3%83%BC%E3%83%A0%E3%83%9A%E3%83%BC%E3%82%B8%E5%88%B6%E4%BD%9C&order=new&page=2"]:
-                  for extra in ["", "&hide_expired=true"]:
-                      url = base + extra
-                      pg.goto(url, wait_until="domcontentloaded", timeout=30000)
-                      try:
-                          pg.wait_for_selector("a[href*='/public/jobs/']", timeout=10000)
-                      except Exception:
-                          pass
-                      body = pg.locator("body").inner_text()
-                      jobs = sc._extract_jobs(pg, "x", 60)
-                      ids = sorted(int(j.url.rsplit("/", 1)[-1]) for j in jobs if j.url.rsplit("/", 1)[-1].isdigit())
-                      closed_badges = body.count("募集終了")
-                      print(f"::notice title={'カテゴリ20' if 'category' in base else 'キーワード'} {extra or '（そのまま）'}::{len(jobs)}件 ID {ids[0] if ids else '-'}〜{ids[-1] if ids else '-'}・ページ内の「募集終了」の字 {closed_badges}個・URL {pg.url[-60:]}")
-                      time.sleep(2)
+              for name, url, label in cases:
+                  pg.goto(url, wait_until="domcontentloaded", timeout=30000)
+                  try:
+                      pg.wait_for_selector("a[href*='/public/jobs/']", timeout=10000)
+                  except Exception:
+                      pass
+                  d = pg.evaluate(JS)
+                  jobs = d["jobs"]
+                  closed = sum("募集終了" in j["sur"] for j in jobs)
+                  passed = sum(label in j["title"] or label in j["sur"] for j in jobs)
+                  boxes = {}
+                  for j in jobs:
+                      boxes[j["box"]] = boxes.get(j["box"], 0) + 1
+                  ids = sorted(j["id"] for j in jobs)
+                  first = jobs[0]["sur"].replace("\n", "｜")[:300] if jobs else "-"
+                  results.append(f"{name}::{len(jobs)}件（うち募集終了 {closed}・今の絞り込みを通る {passed}）ID {ids[0] if ids else '-'}〜{ids[-1] if ids else '-'}・"
+                                 f"入れ物 {json.dumps(boxes, ensure_ascii=False)}・見出し {d['heads']}・ラベル {d['labels']}・1件目「{first}」・最後の題名「{jobs[-1]['title'] if jobs else '-'}」")
+                  time.sleep(2)
               b.close()
+          with open("probe.txt", "w") as f:
+              f.write("\n".join(results))
           EOF
+      - name: 結果（前半）
+        working-directory: job_scraper
+        run: head -n 6 probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果（後半）
+        working-directory: job_scraper
+        run: tail -n +7 probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
