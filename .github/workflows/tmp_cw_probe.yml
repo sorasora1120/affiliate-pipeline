@@ -1,0 +1,40 @@
+name: 一時チェック（CrowdWorksの検索結果）
+
+# 2026-10-09、収集が5時間で2件しか新着を拾っていないため、CrowdWorksの検索1ページ目に
+# 何が出ているか・そのうちシートにまだ無い案件が何件あるかを確かめる。確認後に消す。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - working-directory: job_scraper
+        run: pip install -r requirements.txt && playwright install chromium --with-deps
+      - name: 調べる
+        working-directory: job_scraper
+        run: |
+          python3 - <<'EOF'
+          import json, urllib.parse, urllib.request
+          from src.crowdworks_scraper import CrowdWorksScraper, CrowdWorksBlocked
+          SHEET = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
+          q = urllib.parse.urlencode({"tqx": "out:json", "sheet": "案件一覧", "tq": "select G"})
+          text = urllib.request.urlopen(urllib.request.Request(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?{q}", headers={"User-Agent": "Mozilla/5.0"}), timeout=60).read().decode()
+          data = json.loads(text[text.index("(") + 1:text.rindex(")")])
+          known = {(r["c"][0] or {}).get("v") for r in data["table"]["rows"] if r.get("c")}
+          for kw in ["ホームページ制作", "LP制作", "Web制作"]:
+              try:
+                  jobs = CrowdWorksScraper().fetch_jobs([kw], max_per_keyword=40, interval_seconds=2, pages_per_keyword=1)
+              except CrowdWorksBlocked as e:
+                  print(f"::notice title={kw}::403で拒否された {e}")
+                  continue
+              new = [j for j in jobs if j.url not in known]
+              print(f"::notice title={kw}::1ページ目 {len(jobs)}件・シートに無い {len(new)}件 → " + " / ".join(f"{j.url.rsplit('/',1)[-1]} {j.title[:30]}" for j in new[:15]))
+              print(f"::notice title={kw}（先頭10件）::" + " / ".join(f"{j.url.rsplit('/',1)[-1]} {j.title[:25]}" for j in jobs[:10]))
+          EOF
