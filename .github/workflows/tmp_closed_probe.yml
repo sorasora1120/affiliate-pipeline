@@ -1,0 +1,48 @@
+name: 一時チェック（募集終了の判定）
+
+# 2026-10-09、カテゴリ一覧から集めた案件の多くがすぐ「募集終了」になったため、本当に終わっているのか、
+# 判定の言葉（募集は終了・契約済み など）が開いている案件にも出ていて誤判定しているのかを確かめる。確認後に消す。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - working-directory: job_scraper
+        run: pip install -r requirements.txt && playwright install chromium --with-deps
+      - name: 調べる
+        working-directory: job_scraper
+        run: |
+          python3 - <<'EOF'
+          import json, urllib.parse, urllib.request
+          from datetime import datetime, timedelta, timezone
+          from playwright.sync_api import sync_playwright
+          from src.expiry_checker import CW_CLOSED_MARKERS
+          today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
+          SHEET = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
+          q = urllib.parse.urlencode({"tqx": "out:json", "sheet": "案件一覧", "tq": f"select C,G where A = '対象外（募集終了）' and Q = '{today}'"})
+          text = urllib.request.urlopen(urllib.request.Request(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?{q}", headers={"User-Agent": "Mozilla/5.0"}), timeout=60).read().decode()
+          rows = [[(c or {}).get("v") for c in r["c"]] for r in json.loads(text[text.index("(") + 1:text.rindex(")")])["table"]["rows"]]
+          print(f"::notice title=今日「募集終了」になった件数::{len(rows)}")
+          with sync_playwright() as pw:
+              b = pw.chromium.launch(headless=True)
+              pg = b.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36", locale="ja-JP").new_page()
+              for title, url in rows[-10:]:
+                  pg.goto(url, wait_until="domcontentloaded", timeout=20000)
+                  pg.wait_for_timeout(1200)
+                  body = pg.locator("body").inner_text()
+                  hits = []
+                  for m in CW_CLOSED_MARKERS:
+                      i = body.find(m)
+                      if i != -1:
+                          hits.append(f"「{m}」…{body[max(0, i - 25):i + 35]}…".replace("\n", " "))
+                  print(f"::notice title={(title or '')[:30]}::{url.rsplit('/', 1)[-1]} {' | '.join(hits) or '当たった言葉なし'}")
+              b.close()
+          EOF
