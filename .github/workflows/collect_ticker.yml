@@ -1,0 +1,46 @@
+name: 新着チェックの起動（10分ごと）
+
+# 2026-10-09追加。GitHubの定期実行（schedule）はこのリポジトリでは大きく遅れたり飛ばされたりして、
+# 「1時間ごとの新着チェック」が実際には数時間に1回しか動いていなかった（10-09 08:00〜13:00 UTC に1回だけ）。
+# 10分ごとに起きて、直近50分に収集（毎日の収集・新着チェック）が始まっていなければ新着チェックを手動実行する。
+# 1回数秒で終わる。いくつか飛ばされても、1時間に1回はどれかが起きる見込み。
+# 新着チェック（job_scraper_hourly.yml）自身の schedule は、二重に動かないようにこちらへ一本化した。
+on:
+  schedule:
+    # JST 7:04〜23:54（毎時0分は混むので4分ずらす）
+    - cron: "4-59/10 0-14,22,23 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: collect-ticker
+  cancel-in-progress: true
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 直近50分に収集が始まっていなければ、新着チェックを動かす
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          since=$(date -u -d '50 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          recent=0
+          for wf in job_scraper.yml job_scraper_hourly.yml; do
+            # 待ち（同じグループの収集が終わるのを待っている）も含めて数える
+            n=$(gh api "repos/$REPO/actions/workflows/$wf/runs?per_page=5" \
+                  --jq "[.workflow_runs[] | select(.created_at > \"$since\")] | length") || n=1
+            recent=$((recent + n))
+          done
+          if [ "$recent" -gt 0 ]; then
+            echo "直近50分に収集が始まっているので見送り（$recent 回）"
+          elif gh api -X POST "repos/$REPO/actions/workflows/job_scraper_hourly.yml/dispatches" -f ref=main; then
+            echo "::notice title=新着チェックを起動::直近50分に収集が無かったので job_scraper_hourly.yml を動かした"
+          else
+            # 失敗で赤くしない（次の回がまた試す）
+            echo "::warning title=新着チェックを起動できなかった::次の回にまた試す"
+          fi
