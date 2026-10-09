@@ -232,3 +232,12 @@ class RecheckExcludedTest(unittest.TestCase):
         self.assertEqual([c["row"] for c in cands], [2])
         self.assertEqual(excluded, [])
 
+
+class JobCategoriesConfigTest(unittest.TestCase):
+    def test_category_labels_are_matching_targets(self):
+        import config
+        self.assertTrue(config.JOB_CATEGORIES)
+        for label, cid in config.JOB_CATEGORIES:
+            self.assertIn(label, config.WORKER_MATCH_CATEGORIES, label)
+            self.assertTrue(cid.isdigit(), cid)
+

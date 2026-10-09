@@ -25,6 +25,9 @@ JST = timezone(timedelta(hours=9))
 # （フィルタなしの全件検索＝34万件がそのまま返ってきていた）、2026-08-01に実機で
 # 検索ボックスを実際に操作して "search[keywords]=" が正しいパラメータ名だと確認した。
 SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new&page={page}"
+# カテゴリ一覧ページ（新着順）。2026-10-09、キーワード検索では題名に検索語が無い案件を取りこぼしていた
+# （ホームページ作成・LP・HTML/CSS・WordPress・Webデザインの1ページ目だけで、シートに無い案件が168件あった）
+CATEGORY_URL = "https://crowdworks.jp/public/jobs/category/{category_id}?order=new&page={page}"
 DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
 # 「30,000円 〜 50,000円」のような範囲表記を優先して拾う。範囲を先に試さないと
 # 単一値用の正規表現が先頭の下限だけにマッチしてしまい、上限の情報が失われる
@@ -48,7 +51,13 @@ class CrowdWorksBlocked(Exception):
 
 class CrowdWorksScraper:
     def fetch_jobs(self, keywords: list[str], max_per_keyword: int = 20,
-                    interval_seconds: float = 3.0, pages_per_keyword: int = 2) -> list[JobPosting]:
+                    interval_seconds: float = 3.0, pages_per_keyword: int = 2,
+                    categories: list[tuple[str, str]] = ()) -> list[JobPosting]:
+        """keywords で検索したあと、categories（(案件に付けるカテゴリ名, CrowdWorksのカテゴリID) の並び）の一覧ページも見る。
+
+        カテゴリ一覧から拾った案件には、キーワードと同じカテゴリ名（例「ホームページ制作」）を付けるので、
+        その後のマッチング（題名の関連判定・除外語・予算）は今までと同じに通る。
+        """
         jobs: list[JobPosting] = []
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
@@ -63,11 +72,15 @@ class CrowdWorksScraper:
             # （2026-08-13発覚、40回中3回）。要素取得は数秒で十分なので短くする。
             page.set_default_timeout(5_000)
             try:
-                for keyword in keywords:
+                sources = [(kw, kw, None) for kw in keywords] + [(label, f"カテゴリ{cid}", cid) for label, cid in categories]
+                for keyword, source_name, category_id in sources:
                     keyword_jobs: list[JobPosting] = []
                     for page_num in range(1, pages_per_keyword + 1):
-                        url = SEARCH_URL.format(keyword=quote(keyword), page=page_num)
-                        logger.info("CrowdWorks 検索: %s %d/%d ページ (%s)", keyword, page_num, pages_per_keyword, url)
+                        if category_id is None:
+                            url = SEARCH_URL.format(keyword=quote(keyword), page=page_num)
+                        else:
+                            url = CATEGORY_URL.format(category_id=category_id, page=page_num)
+                        logger.info("CrowdWorks 検索: %s %d/%d ページ (%s)", source_name, page_num, pages_per_keyword, url)
                         try:
                             # networkidleは常時通信するウィジェット等で発生しないことがあるため使わない
                             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
@@ -92,7 +105,7 @@ class CrowdWorksScraper:
 
                     jobs.extend(keyword_jobs)
 
-                    if not keyword_jobs:
+                    if not keyword_jobs and category_id is None:
                         from .notifier import notify_discord
                         page.screenshot(path=f"debug_cw_{keyword}.png")
                         html_snippet = page.locator("body").inner_text()[:1000]

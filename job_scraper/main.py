@@ -71,7 +71,7 @@ def run() -> None:
         try:
             cw_jobs = CrowdWorksScraper().fetch_jobs(
                 config.KEYWORDS, config.MAX_JOBS_PER_KEYWORD, config.REQUEST_INTERVAL_SECONDS,
-                config.PAGES_PER_KEYWORD,
+                config.PAGES_PER_KEYWORD, categories=config.JOB_CATEGORIES,
             )
             all_jobs.extend(cw_jobs)
         except CrowdWorksBlocked as exc:
