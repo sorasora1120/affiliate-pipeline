@@ -82,3 +82,14 @@ jobs:
           # 1時間ごとの新着チェックの後は「候補なし」を送らない（毎時届くと埋もれるため）
           QUIET: ${{ (github.event.workflow_run.name == '新着チェック（1時間ごと・CrowdWorks）' || inputs.quiet == '1') && '1' || '0' }}
         run: python worker_match_main.py
+
+      # ビューアが開いた時に最新版へ自動で移れるよう、dispatch-viewer の最新SHAをシートに書く（2026-10-09、viewer_version.py）。
+      # マッチングとは関係ないので、失敗しても赤くしない
+      - name: ビューアの最新版を記録
+        continue-on-error: true
+        working-directory: job_scraper
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python viewer_version.py

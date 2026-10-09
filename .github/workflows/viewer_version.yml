@@ -1,0 +1,29 @@
+name: ビューアの最新版を記録
+
+# 2026-10-09追加。dispatch-viewer の最新コミットSHAをスプレッドシートの「設定」タブに書く（viewer_version.py）。
+# ビューアは開いた時にこれを読んで最新版へ自動で移るので、ユーザーは同じリンクを使い続けられる。
+# ビューアを直したら手動で動かす。収集のたびに worker_match.yml の最後でも同じことをする。
+on:
+  workflow_dispatch:
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install gspread google-auth
+      - name: 記録する
+        working-directory: job_scraper
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python viewer_version.py
+      - name: ビューアと同じ読み方（公開のgviz）で読めるか確かめる
+        run: |
+          got=$(curl -sS "https://docs.google.com/spreadsheets/d/1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0/gviz/tq?tqx=out:json&sheet=%E8%A8%AD%E5%AE%9A&range=A1:C1&headers=0" | grep -oE '[0-9a-f]{40}' | head -1)
+          echo "::notice title=ビューアから見える最新版::${got:-読めなかった}"

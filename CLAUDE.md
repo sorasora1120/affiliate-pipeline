@@ -8,6 +8,8 @@
 - 学校のネットワークは github.com / github.io がブロックされる。ページを渡すときは
   `https://rawcdn.githack.com/sorasora1120/<repo>/<コミットSHA>/<path>` の形（コミット固定）で渡す
   （raw.githack.com は 429 になったので使わない）
+- ビューア（dispatch-viewer）は開くと最新版へ自動で移るので、直すたびに新しいリンクを渡さない。直したら
+  `viewer_version.yml` を手動実行（スプレッドシートの「設定」タブ B1 に最新SHAを書く。2026-10-09〜）
 
 ## ビジネスの全体像
 - CrowdWorks の Web制作案件を自動収集 → 「ソラ」として応募 → 海外のワーカーに予算−手数料−利益で外注する
