@@ -1,6 +1,6 @@
 import unittest
 
-from daily_stats import discord_message, summarize
+from daily_stats import discord_message, recent_outcomes, summarize
 
 
 def _r(stage="", status="提案済み", title="美容室のホームページ制作", budget="50,000円", date="2026-10-08", applicants="3"):
@@ -23,3 +23,13 @@ class SummarizeTest(unittest.TestCase):
         self.assertNotIn("返信が来やすい", discord_message(s, "2026-10-08"))
         s = summarize([_r("replied", title="LP制作"), _r("applied")], "2026-10-08")
         self.assertIn("返信が来やすい種類：LP（1/1（100%））", discord_message(s, "2026-10-08"))
+
+
+class RecentOutcomesTest(unittest.TestCase):
+    def test_counts_and_lists_filtered_titles(self):
+        rows = [_r(), _r(status="対象外（除外キーワード）", title="WEBデザイン講師募集"),
+                _r(status="対象外（予算未達）", title="安い案件"), _r(status="対象外（要注意）", title="成果報酬のLP")]
+        summary, dropped = recent_outcomes(rows)
+        self.assertIn("提案済み 1", summary)
+        self.assertEqual(dropped, ["[除外キーワード] WEBデザイン講師募集", "[要注意] 成果報酬のLP"])
+

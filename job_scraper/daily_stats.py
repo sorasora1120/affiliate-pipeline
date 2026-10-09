@@ -37,9 +37,8 @@ TYPE_JA = {
 }
 
 
-def fetch_rows() -> list[dict]:
-    """提案済みの行と、進捗ステージが付いた行だけを読む。"""
-    tq = "select A,C,E,Q,R,S where A = '提案済み' or R != ''"
+def fetch_rows(tq: str = "select A,C,E,Q,R,S where A = '提案済み' or R != ''") -> list[dict]:
+    """既定では、提案済みの行と、進捗ステージが付いた行だけを読む。"""
     query = urllib.parse.urlencode({"tqx": "out:json", "sheet": SHEET_NAME, "tq": tq})
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?{query}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -136,8 +135,29 @@ def discord_message(s: dict, today: str) -> str:
     return "\n".join(lines)
 
 
+def recent_outcomes(rows: list[dict]) -> tuple[str, list[str]]:
+    """直近に集めた案件が、どのステータスになったかの内訳と、フィルタで外れた案件のタイトル。
+
+    2026-10-09追加。朝の収集で送れる案件が1件も増えなかったため、新着が本当に少ないのか、
+    フィルタ（除外語・関連判定・要注意）で外しすぎているのかを、定期チェックで見分けられるようにする。
+    """
+    counts: dict[str, int] = defaultdict(int)
+    dropped = []
+    for r in rows:
+        counts[r["status"] or "（空）"] += 1
+        if r["status"] in ("対象外（除外キーワード）", "対象外（要注意）"):
+            dropped.append(f"[{r['status'][4:-1]}] {r['title']}")
+    summary = " / ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
+    return summary or "なし", dropped
+
+
 def main() -> None:
     today = datetime.now(JST).strftime("%Y-%m-%d")
+    since = (datetime.now(JST) - timedelta(days=1)).strftime("%Y-%m-%d")
+    recent = fetch_rows(f"select A,C,E,Q,R,S where Q >= '{since}'")
+    summary, dropped = recent_outcomes(recent)
+    print(f"::notice title={since}以降に集めた案件の行き先::{summary}")
+    print(f"::notice title=フィルタで外れた案件（{since}以降・最大50件）::{' / '.join(dropped[-50:]) or 'なし'}")
     s = summarize(fetch_rows(), today)
     print(f"::notice title=全体::送れる案件 {s['pool']}件・今日の新着 {s['new_today']}件・"
           f"応募 {s['applied']}・返信 {s['replied']}・採用 {s['hired']}・返信率 {rate(s['replied'], s['applied'])}")
