@@ -21,20 +21,25 @@ jobs:
         working-directory: job_scraper
         run: |
           python3 - <<'EOF'
-          import json, urllib.parse, urllib.request
-          from src.crowdworks_scraper import CrowdWorksScraper, CrowdWorksBlocked
-          SHEET = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
-          q = urllib.parse.urlencode({"tqx": "out:json", "sheet": "案件一覧", "tq": "select G"})
-          text = urllib.request.urlopen(urllib.request.Request(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?{q}", headers={"User-Agent": "Mozilla/5.0"}), timeout=60).read().decode()
-          data = json.loads(text[text.index("(") + 1:text.rindex(")")])
-          known = {(r["c"][0] or {}).get("v") for r in data["table"]["rows"] if r.get("c")}
-          for kw in ["ホームページ制作", "LP制作", "Web制作"]:
-              try:
-                  jobs = CrowdWorksScraper().fetch_jobs([kw], max_per_keyword=40, interval_seconds=2, pages_per_keyword=1)
-              except CrowdWorksBlocked as e:
-                  print(f"::notice title={kw}::403で拒否された {e}")
-                  continue
-              new = [j for j in jobs if j.url not in known]
-              print(f"::notice title={kw}::1ページ目 {len(jobs)}件・シートに無い {len(new)}件 → " + " / ".join(f"{j.url.rsplit('/',1)[-1]} {j.title[:30]}" for j in new[:15]))
-              print(f"::notice title={kw}（先頭10件）::" + " / ".join(f"{j.url.rsplit('/',1)[-1]} {j.title[:25]}" for j in jobs[:10]))
+          import re
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as pw:
+              b = pw.chromium.launch(headless=True)
+              pg = b.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36", locale="ja-JP").new_page()
+              found = {}
+              for url in ["https://crowdworks.jp/public/jobs?order=new", "https://crowdworks.jp/public/jobs/group/web_products", "https://crowdworks.jp/public/jobs/group/development"]:
+                  try:
+                      pg.goto(url, wait_until="domcontentloaded", timeout=30000)
+                      pg.wait_for_timeout(2500)
+                  except Exception as e:
+                      print(f"::notice title=読み込み失敗::{url} {e}"); continue
+                  print(f"::notice title=開いたページ::{url} → {pg.url} / {pg.title()}")
+                  for a in pg.locator("a[href*='/public/jobs/category/']").all()[:400]:
+                      href = a.get_attribute("href") or ""
+                      m = re.search(r"/public/jobs/category/(\d+)", href)
+                      if m:
+                          t = (a.inner_text() or "").strip().replace("\n", " ")[:30]
+                          found.setdefault(m.group(1), t)
+              print("::notice title=カテゴリ一覧::" + " / ".join(f"{k}:{v}" for k, v in sorted(found.items(), key=lambda kv: int(kv[0]))))
+              b.close()
           EOF
