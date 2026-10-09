@@ -26,10 +26,14 @@ _RELEVANT_WORDS_JA = [
     "ホームページ", "ランディング", "ワードプレス", "ペライチ",
     "オウンドメディア", "ページ制作", "ページ作成",
     "コーディング",  # 2026-10-08、HTML/LPコーディングの案件を拾うため
+    "トップページ", "topページ",  # 2026-10-09、「会話教室のトップページの作成依頼」「TOPページのテキスト流し込み」を落としていた
 ]
+# 「サービスページを作成」「文芸ページの修正」のように、ページと作業の間に「の」「を」が入る言い方（2026-10-09）
+_PAGE_WORK_RE = re.compile(r"ページ[のを]?(?:制作|作成|デザイン|修正|改修|更新|リニューアル|構築|実装|コーディング)")
 # 英字の短い語は単語の一部（"project"の"ec"等）に誤一致しないよう、前後が英字でない
 # ことを条件にする。全角英字はNFKC正規化で半角にそろえてから判定する。
-_RELEVANT_WORDS_LATIN = ["hp", "lp", "shopify", "wordpress", "studio", "wix", "html"]
+# wp は WordPress の略（2026-10-09、「WPのコンタクトフォーム」を落としていた）
+_RELEVANT_WORDS_LATIN = ["hp", "lp", "shopify", "wordpress", "studio", "wix", "html", "wp"]
 # これだけでは制作の案件か分からない言葉（「ポータルサイトに出演」「サイト運営スタッフ」など）。
 # 2026-10-08、「SNS版ポータルサイトに出演してくださる女性の方を募集」が通っていたため、
 # この言葉しかない案件は、作業を表す言葉（_WORK_WORDS）も入っているときだけ通す
@@ -43,7 +47,8 @@ _WORK_WORDS = [
 
 
 def _normalize(title: str) -> str:
-    return unicodedata.normalize("NFKC", title or "").lower()
+    # 「Word Press」「WordPresss」のような書き方も wordpress にそろえる（2026-10-09、題名の書き間違いで落としていた）
+    return re.sub(r"word\s*press+", "wordpress", unicodedata.normalize("NFKC", title or "").lower())
 
 
 def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:
@@ -69,7 +74,7 @@ def _has_latin_word(t: str, words: list[str]) -> bool:
 
 def is_relevant_title(title: str) -> bool:
     t = _normalize(title)
-    if any(w in t for w in _RELEVANT_WORDS_JA) or _has_latin_word(t, _RELEVANT_WORDS_LATIN):
+    if any(w in t for w in _RELEVANT_WORDS_JA) or _has_latin_word(t, _RELEVANT_WORDS_LATIN) or _PAGE_WORK_RE.search(t):
         return True
     weak = any(w in t for w in _WEAK_WORDS_JA) or _has_latin_word(t, _WEAK_WORDS_LATIN)
     return weak and any(w in t for w in _WORK_WORDS)

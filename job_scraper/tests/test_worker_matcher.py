@@ -198,6 +198,20 @@ class RelevantTitleWeakWordTest(unittest.TestCase):
         self.assertTrue(is_relevant_title("ネットショップを作りたいです"))
         self.assertTrue(is_relevant_title("ネットショップ開設のお手伝い"))
 
+    def test_page_work_and_wordpress_spellings(self):
+        # 2026-10-09、外した案件を見直して見つけた取りこぼし
+        from src.worker_matcher import is_relevant_title
+        self.assertTrue(is_relevant_title("会話教室のトップページの作成依頼"))
+        self.assertTrue(is_relevant_title("TOPページのテキスト流し込み・画像差し替え・配置"))
+        self.assertTrue(is_relevant_title("新規事業(MEO対策事業)のサービスページを作成して欲しい"))
+        self.assertTrue(is_relevant_title("Word Pressの修正ができる方"))
+        self.assertTrue(is_relevant_title("WordPresssの投稿画面・遅延改善作業"))
+        self.assertTrue(is_relevant_title("WPのコンタクトフォーム"))
+        # 画像やSNSの仕事は今までどおり落とす
+        self.assertFalse(is_relevant_title("ふるさと納税 返礼品ページの商品画像デザイン制作"))
+        self.assertFalse(is_relevant_title("【20代歓迎◎】国内旅行が好きな方へ｜Instagram投稿デザイン制作"))
+        self.assertFalse(is_relevant_title("Amazon商品画像（9枚）の修正・リニューアル"))
+
 
 class TitleExcludedTest(unittest.TestCase):
     def test_ascii_keywords_match_whole_words_only(self):
