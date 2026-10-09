@@ -9,7 +9,14 @@ on:
   workflow_run:
     workflows: ["案件収集パイプライン（CrowdWorks）", "新着チェック（1時間ごと・CrowdWorks）"]
     types: [completed]
+  # 2026-10-09、collect_ticker.yml がトークン（GITHUB_TOKEN）で起動した新着チェックの後は workflow_run が
+  # 起きないため、新着チェックの最後の job から quiet=1 でこちらを起動する
   workflow_dispatch:
+    inputs:
+      quiet:
+        description: "1 にすると「候補なし」を送らない（新着チェックの後から起動された時）"
+        required: false
+        default: "0"
 
 # 定期実行と手動トリガーの重なりを防ぐ（job_scraper.ymlと同じ理由）
 concurrency:
@@ -73,5 +80,5 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
           # 1時間ごとの新着チェックの後は「候補なし」を送らない（毎時届くと埋もれるため）
-          QUIET: ${{ github.event.workflow_run.name == '新着チェック（1時間ごと・CrowdWorks）' && '1' || '0' }}
+          QUIET: ${{ (github.event.workflow_run.name == '新着チェック（1時間ごと・CrowdWorks）' || inputs.quiet == '1') && '1' || '0' }}
         run: python worker_match_main.py

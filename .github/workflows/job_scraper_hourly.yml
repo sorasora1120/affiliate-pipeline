@@ -32,3 +32,17 @@ jobs:
     uses: ./.github/workflows/cw_collect_attempt.yml
     with: { pages: "1", quiet: "1" }
     secrets: inherit
+  # collect_ticker.yml（github-actions[bot]）に起動された回は、終わっても worker_match.yml の workflow_run が
+  # 起きない（2026-10-09確認：トークンで起きたイベントからは次のワークフローが動かない決まり）。その時だけここで起動する
+  match:
+    needs: [try1, try2, try3]
+    if: ${{ always() && github.triggering_actor == 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: write
+    steps:
+      - name: マッチングを起動
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/actions/workflows/worker_match.yml/dispatches" -f ref=main -f "inputs[quiet]=1"
