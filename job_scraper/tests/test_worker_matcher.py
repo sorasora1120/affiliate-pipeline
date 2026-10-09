@@ -177,6 +177,43 @@ class QuoteBudgetTest(unittest.TestCase):
         self.assertEqual(cands, [])
 
 
+class TitlePriceTest(unittest.TestCase):
+    # 2026-10-09、題名に「予算5万円固定」とあるのに予算欄の「500,005円」を、「税込1万円」とあるのに2万円を出していた
+    def test_reads_only_a_single_total_price(self):
+        from src.budget_utils import title_price_yen
+        self.assertEqual(title_price_yen("【予算5万円固定】2店舗対応のシンプルなホームページ（LP）作成"), 50000)
+        self.assertEqual(title_price_yen("【税込1万円／モック・素材あり】LPファーストビューのデザイン調整"), 10000)
+        self.assertEqual(title_price_yen("【報酬5万】サイトの再構築と編集"), 50000)
+        self.assertIsNone(title_price_yen("【継続・月5〜7万円見込み】LP・HP改善"))
+        self.assertIsNone(title_price_yen("Kickstarterプロジェクトページのデザイン（1本30,000円〜）"))
+        self.assertIsNone(title_price_yen("【時給3,000円〜】LPデザイン制作"))
+        self.assertIsNone(title_price_yen("月間10万PVのメディアのWordPress改修"))
+        self.assertIsNone(title_price_yen("2026年10月公開のLP制作"))
+
+    def test_quote_never_exceeds_the_title_price(self):
+        rows = [_row(タイトル="【予算5万円固定】シンプルなホームページ（LP）作成", 予算="500,005円"),
+                _row(タイトル="【税込1万円／モック・素材あり】LPファーストビューのデザイン調整", 予算="10,000円 〜 30,000円"),
+                _row(タイトル="【予算3万円】ホームページ制作", 予算="契約金額はワーカーと相談する")]
+        cands, below, _ = find_candidates(rows, CATEGORIES, EXCLUDE, 5000, 20, 1000, 30000)
+        self.assertEqual(below, [])
+        self.assertEqual([c["amount"] for c in cands], [50000, 10000, 30000])
+
+    def test_title_price_below_minimum_is_below_budget(self):
+        cands, below, _ = find_candidates([_row(タイトル="【3,000円】LPの修正", 予算="〜 5,000円")],
+                                          CATEGORIES, EXCLUDE, 5000, 20, 1000, 30000)
+        self.assertEqual(cands, [])
+        self.assertEqual(below, [2])
+
+
+class RoughLineTest(unittest.TestCase):
+    def test_matches_the_size_of_the_job(self):
+        from src.worker_matcher import _rough_line
+        self.assertIn("ファーストビュー", _rough_line("看護師向けLPのファーストビュー1画面デザイン"))
+        self.assertIn("作業の範囲", _rough_line("WordPressのレイアウト修正"))
+        self.assertIn("LPの構成図", _rough_line("美容サロンのLP制作"))
+        self.assertIn("トップページの構成図", _rough_line("コーポレートサイトのリニューアル"))
+
+
 class RelevantTitleWeakWordTest(unittest.TestCase):
     def test_site_only_titles_need_a_work_word(self):
         from src.worker_matcher import is_relevant_title

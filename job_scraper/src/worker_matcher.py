@@ -14,7 +14,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
-from .budget_utils import parse_budget_yen, quote_budget_yen
+from .budget_utils import parse_budget_yen, quote_budget_yen, title_price_yen
 
 # カテゴリ（＝収集時の検索キーワード）が一致しても、ココナラの検索は緩く
 # 「アンケート回答者募集」「バイマ出品作業」のような無関係な案件も返してくる
@@ -410,6 +410,20 @@ def pick_ideas(job_key: str, description: str) -> list[str]:
     return extra + base[: 3 - len(extra)]
 
 
+def _rough_line(title: str) -> str:
+    """契約前に見せるもの。案件の大きさに合わせる（2026-10-09、ファーストビュー1画面だけの依頼や
+    小さな修正にも「トップページの構成図」と書いていて、募集を読んでいないように見えたため）。"""
+    t = _normalize(title)
+    if re.search(r"ファーストビュー|メインビジュアル|(?<![a-z])(?:fv|mv)(?![a-z])", t):
+        return "ご契約前に、ファーストビューのラフをお見せできます。"
+    if (re.search(r"修正|更新|追加|差し替え|変更|移行|流し込み|改善|設定|フォーム", t)
+            and not re.search(r"リニューアル|制作|作成|構築|新規", t)):
+        return "ご契約前に、作業の範囲と手順を箇条書きでお送りします。"
+    if job_type(title) == "lp":
+        return "ご契約前に、LPの構成図（ラフ）をお見せできます。"
+    return "ご契約前に、トップページの構成図（ラフ）をお見せできます。"
+
+
 def _tailored_parts(title: str, description: str = "") -> dict:
     key = job_type(title)
     spec = _TYPE_TEXT[key]
@@ -419,6 +433,7 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         "portfolio": PORTFOLIO_BASE_URL,
         "team_count": len(TEAM_WORKS),
         "question": spec["questions"][0],
+        "rough": _rough_line(title),
     }
 
 
@@ -442,13 +457,13 @@ _OUTRO = """
 
 PROPOSAL_TEMPLATE = _INTRO + """
 お見積り：{amount:,}円（一式）
-ご契約前に、トップページの構成図（ラフ）をお見せできます。
+{rough}
 """ + _OUTRO
 
 # 予算が「見積り希望」等で未提示の案件用（目安額を示し、正式な金額は要件確認後に出す）
 PROPOSAL_TEMPLATE_QUOTE = _INTRO + """
 お見積り：{amount_estimate:,}円前後を想定しています（内容を伺って、正式な金額をお出しします）。
-ご契約前に、トップページの構成図（ラフ）をお見せできます。
+{rough}
 """ + _OUTRO
 
 
@@ -473,6 +488,24 @@ def platform_fee(platform: str, amount: int) -> int:
         return int(amount * 0.165)
     # ココナラ（出品者手数料22%）。プラットフォーム不明の場合も安全側でこれを使う
     return int(amount * 0.22)
+
+
+def budget_and_quote(budget_text: str, title: str, min_budget_yen: int) -> tuple[int | None, int | None]:
+    """(応募するかを決める金額, 提案文で出す金額)。どちらも分からなければ (None, None)。
+
+    予算欄の範囲は上限で応募を決め、提案は真ん中で出す（2026-10-08）。題名に「【予算5万円固定】」
+    「【税込1万円】」のような金額が書いてあれば、どちらもそれを超えないようにする（2026-10-09、
+    予算欄の「500,005円」や範囲の真ん中をそのまま出していた）。予算欄が「見積り希望」でも題名の金額で決める。
+    """
+    upper = parse_budget_yen(budget_text)
+    stated = title_price_yen(title)
+    if upper is None:
+        return stated, stated
+    # 真ん中が最低予算より低い時は最低予算（ただし上限まで）にする
+    quote = max(quote_budget_yen(budget_text) or upper, min(min_budget_yen, upper))
+    if stated is None:
+        return upper, quote
+    return min(upper, stated), min(quote, stated)
 
 
 def split_amount(
@@ -534,8 +567,8 @@ def find_candidates(
 
         # 「30,000円 〜 50,000円」の範囲表記は上限を、「5千円未満」「10万円」の
         # ような位取り略記も金額として解釈する（budget_utils.parse_budget_yen、
-        # 2026-08-11修正）。
-        parsed_amount = parse_budget_yen(r.get("予算", ""))
+        # 2026-08-11修正）。題名に金額が書いてあればそれを超えない（budget_and_quote、2026-10-09）
+        parsed_amount, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
         base = {
             "row": idx,
             "platform": r.get("プラットフォーム"),
@@ -575,9 +608,7 @@ def find_candidates(
         if parsed_amount < min_budget_yen:
             below_budget_rows.append(idx)
             continue
-        # 応募するかどうかは上限で決め、提案文で出す金額は範囲の真ん中にする（2026-10-08）。
-        # 真ん中が最低予算より低い時は最低予算（ただし上限まで）にする
-        amount = max(quote_budget_yen(r.get("予算", "")) or parsed_amount, min(min_budget_yen, parsed_amount))
+        # 応募するかどうかは上限で決め、提案文で出す金額は範囲の真ん中にする（2026-10-08）
         fee, margin, quote = split_amount(base["platform"], amount, margin_percent, margin_min_yen, margin_max_yen)
         if quote <= 0:
             below_budget_rows.append(idx)
@@ -610,10 +641,9 @@ def review_proposed_rows(
         if title_has_excluded(title, excluded_keywords) or not is_relevant_title(title):
             irrelevant_rows.append(idx)
             continue
-        amount = parse_budget_yen(r.get("予算", ""))
+        # 提案で出す金額は範囲の真ん中で、題名の金額は超えない（find_candidates と同じ考え方）
+        _, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
         if amount is not None:
-            # 提案で出す金額は範囲の真ん中（find_candidates と同じ考え方）
-            amount = max(quote_budget_yen(r.get("予算", "")) or amount, min(min_budget_yen, amount))
             # 予算のある行も、提案文を最新のテンプレートで作り直す
             fee, margin, quote = split_amount(
                 r.get("プラットフォーム", ""), amount, margin_percent, margin_min_yen, margin_max_yen
