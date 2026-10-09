@@ -24,10 +24,13 @@ JST = timezone(timedelta(hours=9))
 # 旧パラメータ名は "keyword="だったが、CrowdWorks側の仕様変更で無視されるようになり
 # （フィルタなしの全件検索＝34万件がそのまま返ってきていた）、2026-08-01に実機で
 # 検索ボックスを実際に操作して "search[keywords]=" が正しいパラメータ名だと確認した。
-SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new&page={page}"
+# hide_expired=true は一覧の「募集終了を隠す」。付けないと新着順の一覧の大半が募集終了の案件で
+# （2026-10-09実測：カテゴリ「WordPress制作」の1ページ目50件中48件、「ホームページ制作」の検索結果50件中32件）、
+# 10-08以降に集めた案件の半分以上がすぐ「対象外（募集終了）」になっていた。隠すのはページごと（50件の中から）。
+SEARCH_URL = "https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={keyword}&order=new&hide_expired=true&page={page}"
 # カテゴリ一覧ページ（新着順）。2026-10-09、キーワード検索では題名に検索語が無い案件を取りこぼしていた
 # （ホームページ作成・LP・HTML/CSS・WordPress・Webデザインの1ページ目だけで、シートに無い案件が168件あった）
-CATEGORY_URL = "https://crowdworks.jp/public/jobs/category/{category_id}?order=new&page={page}"
+CATEGORY_URL = "https://crowdworks.jp/public/jobs/category/{category_id}?order=new&hide_expired=true&page={page}"
 DETAIL_URL_RE = re.compile(r"/public/jobs/(\d+)")
 # 「30,000円 〜 50,000円」のような範囲表記を優先して拾う。範囲を先に試さないと
 # 単一値用の正規表現が先頭の下限だけにマッチしてしまい、上限の情報が失われる
@@ -73,6 +76,8 @@ class CrowdWorksScraper:
             page.set_default_timeout(5_000)
             try:
                 sources = [(kw, kw, None) for kw in keywords] + [(label, f"カテゴリ{cid}", cid) for label, cid in categories]
+                empty_keywords: list[str] = []
+                html_snippet = ""
                 for keyword, source_name, category_id in sources:
                     keyword_jobs: list[JobPosting] = []
                     for page_num in range(1, pages_per_keyword + 1):
@@ -95,27 +100,30 @@ class CrowdWorksScraper:
                         if "403" in (page.title() or "") and not jobs and not keyword_jobs:
                             raise CrowdWorksBlocked(page.title())
 
-                        page_jobs = self._extract_jobs(page, keyword, max_per_keyword)
-                        if not page_jobs:
-                            # 2ページ目以降が0件なのは単に案件数が尽きただけの可能性が高いので、
-                            # 通常の「0件アラート」は1ページ目でのみ発報する
-                            break
+                        page_jobs = self._extract_jobs(page, keyword, max_per_keyword,
+                                                       require_keyword=category_id is None)
+                        # 募集終了を隠すのは1ページ（50件）ごとなので、0件のページの先にも募集中の案件がある
+                        # （2026-10-09実測：「ペライチ」は1ページ目50件中、募集中が1件だけ）。途中で打ち切らない
                         keyword_jobs.extend(page_jobs)
                         time.sleep(interval_seconds)
 
                     jobs.extend(keyword_jobs)
 
                     if not keyword_jobs and category_id is None:
-                        from .notifier import notify_discord
-                        page.screenshot(path=f"debug_cw_{keyword}.png")
                         html_snippet = page.locator("body").inner_text()[:1000]
-                        # Discordだけでなく実行ログにも残す（Actions上でブロックされたのか、
-                        # 本当に0件なのかを後から見分けるため）
+                        # 実行ログに残す（Actions上でブロックされたのか、本当に0件なのかを後から見分けるため）
                         logger.warning("CrowdWorks 0件 (%s): title=%r body=%r", keyword, page.title(), html_snippet[:300])
-                        notify_discord(
-                            f"[CrowdWorks] キーワード「{keyword}」で0件でした。"
-                            f"ページ構造が変わった可能性があります。\n{html_snippet}"
-                        )
+                        empty_keywords.append(keyword)
+
+                # 募集中の案件だけを出す（hide_expired）ようにしたので、ニッチな検索語は本当に0件のことがある。
+                # Discordには、全部のキーワードが0件だった時（ページ構造の変更など）だけ1通送る
+                if keywords and len(empty_keywords) == len(keywords):
+                    from .notifier import notify_discord
+                    page.screenshot(path="debug_cw_all_empty.png")
+                    notify_discord(
+                        f"[CrowdWorks] 全部のキーワード（{len(keywords)}個）で0件でした。"
+                        f"ページ構造が変わった可能性があります。\n{html_snippet}"
+                    )
             finally:
                 browser.close()
 
@@ -131,7 +139,14 @@ class CrowdWorksScraper:
         logger.info("CrowdWorks 取得完了: %d件（重複除去後）", len(unique_jobs))
         return unique_jobs
 
-    def _extract_jobs(self, page, keyword: str, max_jobs: int) -> list[JobPosting]:
+    def _extract_jobs(self, page, keyword: str, max_jobs: int, require_keyword: bool = True) -> list[JobPosting]:
+        """require_keyword=False はカテゴリ一覧用。
+
+        カテゴリ一覧の案件カードには検索語が無く、付けるカテゴリ名（例「LP制作」）で絞ると
+        CrowdWorks側のカテゴリ名（「LP（ランディングページ）制作・デザイン」など）と一致せず、
+        Webデザインは52件全部、LPは50件中40件を捨てていた（2026-10-09実測）。カテゴリ一覧のリンクは
+        全部が一覧本体のもので、おすすめ等のウィジェットは無かったので絞らない（関連判定はマッチング側でする）。
+        """
         results: list[JobPosting] = []
         links = page.locator("a[href*='/public/jobs/']")
         count = links.count()
@@ -167,7 +182,7 @@ class CrowdWorksScraper:
                     pass
 
             # 「おすすめの仕事」等、検索キーワードと無関係なウィジェットのリンクを除外
-            if keyword not in title and keyword not in surrounding:
+            if require_keyword and keyword not in title and keyword not in surrounding:
                 continue
 
             budget_range_match = BUDGET_RANGE_RE.search(surrounding)
