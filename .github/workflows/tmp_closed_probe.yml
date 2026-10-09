@@ -40,13 +40,13 @@ jobs:
             const heads = [...document.querySelectorAll("h1,h2,h3")].map(h => h.innerText.trim()).filter(Boolean).slice(0, 12);
             return {jobs: out, heads, labels: [...document.querySelectorAll("label")].map(l => l.innerText.trim()).filter(t => t.includes("募集")).slice(0, 5)};
           }"""
-          kw = "ホームページ制作"
           cases = []
-          for cid, label in [("14", "ホームページ制作"), ("15", "Web制作"), ("16", "HTMLコーディング"), ("17", "LP制作"), ("20", "WordPress制作")]:
-              for extra in ["", "&hide_expired=true"]:
-                  cases.append((f"カテゴリ{cid}{'（隠す）' if extra else ''}", f"https://crowdworks.jp/public/jobs/category/{cid}?order=new{extra}", label))
-          for extra in ["", "&hide_expired=true"]:
-              cases.append((f"キーワード{'（隠す）' if extra else ''}", f"https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={quote(kw)}&order=new{extra}", kw))
+          for kw in ["ホームページ制作", "LP制作", "ペライチ"]:
+              for extra in ["", "&hide_expired=true", "&hide_expired=true&page=2"]:
+                  if kw != "ホームページ制作" and "page=2" in extra:
+                      continue
+                  cases.append((f"{kw}{'（隠す）' if 'hide' in extra else ''}{'2ページ目' if 'page=2' in extra else ''}",
+                                f"https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={quote(kw)}&order=new{extra}", kw))
           results = []
           with sync_playwright() as pw:
               b = pw.chromium.launch(headless=True)
@@ -57,6 +57,8 @@ jobs:
                       pg.wait_for_selector("a[href*='/public/jobs/']", timeout=10000)
                   except Exception:
                       pass
+                  if "403" in (pg.title() or ""):
+                      raise SystemExit("403（このランナーはブロックされている）")
                   d = pg.evaluate(JS)
                   jobs = d["jobs"]
                   closed = sum("募集終了" in j["sur"] for j in jobs)
@@ -66,12 +68,16 @@ jobs:
                       boxes[j["box"]] = boxes.get(j["box"], 0) + 1
                   ids = sorted(j["id"] for j in jobs)
                   first = jobs[0]["sur"].replace("\n", "｜")[:300] if jobs else "-"
-                  results.append(f"{name}::{len(jobs)}件（うち募集終了 {closed}・今の絞り込みを通る {passed}）ID {ids[0] if ids else '-'}〜{ids[-1] if ids else '-'}・"
-                                 f"入れ物 {json.dumps(boxes, ensure_ascii=False)}・見出し {d['heads']}・ラベル {d['labels']}・1件目「{first}」・最後の題名「{jobs[-1]['title'] if jobs else '-'}」")
+                  import re
+                  dates = sorted(m.group(1) for j in jobs if (m := re.search(r"掲載日：\s*(\d{4}年\d{2}月\d{2}日)", j["sur"])))
+                  few = sum(1 for j in jobs if (m := re.search(r"応募数\s*(\d+)\s*人", j["sur"])) and int(m.group(1)) <= 5)
+                  results.append(f"{name}::{len(jobs)}件（うち募集終了 {closed}・今の絞り込みを通る {passed}・応募5人以下 {few}）ID {ids[0] if ids else '-'}〜{ids[-1] if ids else '-'}・"
+                                 f"掲載日 {dates[0] if dates else '-'}〜{dates[-1] if dates else '-'}・入れ物 {json.dumps(boxes, ensure_ascii=False)}・ラベル {d['labels']}・"
+                                 f"題名 {' / '.join(j['title'] for j in jobs[:8])}")
                   time.sleep(2)
               b.close()
           with open("probe.txt", "w") as f:
-              f.write("\n".join(results))
+              f.write("\n".join(results) + "\n")
           EOF
       - name: 結果（前半）
         working-directory: job_scraper
