@@ -198,3 +198,37 @@ class RelevantTitleWeakWordTest(unittest.TestCase):
         self.assertTrue(is_relevant_title("ネットショップを作りたいです"))
         self.assertTrue(is_relevant_title("ネットショップ開設のお手伝い"))
 
+
+class TitleExcludedTest(unittest.TestCase):
+    def test_ascii_keywords_match_whole_words_only(self):
+        from src.worker_matcher import title_has_excluded
+        kws = ["CFO", "BASE", "楽天"]
+        self.assertFalse(title_has_excluded("自社ECサイト（ECFORCE使用）のLPコーディング担当者募集", kws))
+        self.assertFalse(title_has_excluded("DATABASE連携のサイト制作", kws))
+        self.assertTrue(title_has_excluded("CFO候補募集", kws))
+        self.assertTrue(title_has_excluded("BASEでネットショップ開設", kws))
+        self.assertTrue(title_has_excluded("楽天の商品ページ作成", kws))
+
+    def test_real_web_jobs_are_not_excluded(self):
+        import config
+        from src.worker_matcher import is_relevant_title, title_has_excluded
+        for title in ["配信者・ライバー向けのウェブメディア・WebサービスのTOPページデザイン",
+                      "【経験者歓迎】　自社ECサイト（ECFORCE使用）のLPコーディング担当者募集",
+                      "メルマガ登録フォーム付きのLP制作"]:
+            self.assertTrue(is_relevant_title(title) and not title_has_excluded(title, config.WORKER_MATCH_EXCLUDE_KEYWORDS), title)
+
+
+class RecheckExcludedTest(unittest.TestCase):
+    def test_recent_wrongly_excluded_rows_come_back(self):
+        from datetime import date
+        from src.worker_matcher import EXCLUDED_KEYWORD_STATUS
+        today = date.today().strftime("%Y-%m-%d")
+        rows = [
+            _row(ステータス=EXCLUDED_KEYWORD_STATUS, タイトル="ECFORCEのLPコーディング", 検出日=today),
+            _row(ステータス=EXCLUDED_KEYWORD_STATUS, タイトル="ECFORCEのLPコーディング", 検出日="2020-01-01"),
+            _row(ステータス=EXCLUDED_KEYWORD_STATUS, タイトル="動画の編集", 検出日=today),
+        ]
+        cands, below, excluded = find_candidates(rows, CATEGORIES, ["CFO", "動画"], 5000, 20, 1000, 30000)
+        self.assertEqual([c["row"] for c in cands], [2])
+        self.assertEqual(excluded, [])
+

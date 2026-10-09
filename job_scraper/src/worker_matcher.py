@@ -46,6 +46,23 @@ def _normalize(title: str) -> str:
     return unicodedata.normalize("NFKC", title or "").lower()
 
 
+def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:
+    """除外キーワードがタイトルに入っているか。
+
+    英字だけのキーワード（CFO・COO・BASE など）は、単語として出てきた時だけ当てる。
+    2026-10-09、「自社ECサイト（ECFORCE使用）のLPコーディング」が「CFO」に当たって外れていたため。
+    """
+    t = title or ""
+    low = unicodedata.normalize("NFKC", t).lower()
+    for kw in excluded_keywords:
+        if kw.isascii():
+            if re.search(rf"(?<![a-z]){re.escape(kw.lower())}(?![a-z])", low):
+                return True
+        elif kw in t:
+            return True
+    return False
+
+
 def _has_latin_word(t: str, words: list[str]) -> bool:
     return any(re.search(rf"(?<![a-z]){w}(?![a-z])", t) for w in words)
 
@@ -495,10 +512,18 @@ def find_candidates(
             budget = parse_budget_yen(r.get("予算", ""))
             if budget is None or budget < min_budget_yen or (r.get("検出日") or "") < recheck_since:
                 continue
+        elif status == EXCLUDED_KEYWORD_STATUS:
+            # 除外の決まりを直した時、直近に外した案件も拾い直す（2026-10-09、「ECFORCE」が「CFO」に、
+            # 「ライバー向けのウェブメディア」が「ライバー」に当たって外れていたため）。
+            # 今の決まりでもまだ外れるものは、ステータスを書き直さずにそのままにする
+            title = r.get("タイトル", "")
+            if ((r.get("検出日") or "") < recheck_since or title_has_excluded(title, excluded_keywords)
+                    or not is_relevant_title(title)):
+                continue
         elif status != "未チェック":
             continue
         title = r.get("タイトル", "")
-        if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):
+        if title_has_excluded(title, excluded_keywords) or not is_relevant_title(title):
             excluded_keyword_rows.append(idx)
             continue
 
@@ -577,7 +602,7 @@ def review_proposed_rows(
         if r.get("ステータス") != PROPOSED_STATUS or r.get("進捗ステージ"):
             continue
         title = r.get("タイトル", "")
-        if any(kw in title for kw in excluded_keywords) or not is_relevant_title(title):
+        if title_has_excluded(title, excluded_keywords) or not is_relevant_title(title):
             irrelevant_rows.append(idx)
             continue
         amount = parse_budget_yen(r.get("予算", ""))

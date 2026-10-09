@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 import config
 from src.coconala_scraper import CoconalaScraper
 from src.crowdworks_scraper import CrowdWorksBlocked, CrowdWorksScraper
-from src.worker_matcher import is_relevant_title
+from src.worker_matcher import is_relevant_title, title_has_excluded
 from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.proposal_generator import generate_proposal
@@ -129,7 +129,7 @@ def run() -> None:
         job for job in new_jobs
         if job.category in config.WORKER_MATCH_CATEGORIES
         and is_relevant_title(job.title)
-        and not any(kw in job.title for kw in config.WORKER_MATCH_EXCLUDE_KEYWORDS)
+        and not title_has_excluded(job.title, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
     ][:MAX_DETAIL_FETCH]
     client_info_map: dict[str, dict] = {}
     if info_targets:
