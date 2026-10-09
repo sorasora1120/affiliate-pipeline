@@ -27,6 +27,11 @@ SHEET_ID = os.getenv("GOOGLE_SHEET_ID") or "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91E
 SHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME") or "案件一覧"
 JST = timezone(timedelta(hours=9))
 
+# 2026-10-10、応募するアカウントを親の名義のものに替えた。それより前の応募（79件）は前のアカウントのもので、
+# 返信も前のアカウントに届くので、新しいアカウントの返信率は分けて数える。応募した日はシートに無いので、
+# この日以降に集めた案件への応募を「新しいアカウントの分」とみなす（前日に集めた案件へ応募した分は漏れる）
+NEW_ACCOUNT_SINCE = "2026-10-10"
+
 APPLIED = {"applied", "replied", "hired", "ordered", "rejected"}
 REPLIED = {"replied", "hired", "ordered"}
 HIRED = {"hired", "ordered"}
@@ -90,6 +95,7 @@ def applicants_band(text: str) -> str:
 
 def summarize(rows: list[dict], today: str) -> dict:
     s = {"pool": 0, "new_today": 0, "applied": 0, "replied": 0, "hired": 0, "pool_titles": [],
+         "new_account": [0, 0, 0],  # 新しいアカウントの分（応募・返信・採用）
          "by_type": defaultdict(lambda: [0, 0]), "by_budget": defaultdict(lambda: [0, 0]),
          "by_applicants": defaultdict(lambda: [0, 0])}
     for r in rows:
@@ -105,6 +111,9 @@ def summarize(rows: list[dict], today: str) -> dict:
         s["applied"] += 1
         s["replied"] += got_reply
         s["hired"] += stage in HIRED
+        if r["date"] >= NEW_ACCOUNT_SINCE:
+            for i, hit in enumerate((True, got_reply, stage in HIRED)):
+                s["new_account"][i] += hit
         for key, group in (("by_type", TYPE_JA[job_type(r["title"])]),
                            ("by_budget", budget_band(r["budget"])),
                            ("by_applicants", applicants_band(r["applicants"]))):
@@ -127,6 +136,7 @@ def discord_message(s: dict, today: str) -> str:
         f"📊 今日のまとめ（{today}）",
         f"送れる案件：{s['pool']}件（今日の新着 {s['new_today']}件）",
         f"応募 {s['applied']}件 → 返信 {s['replied']}件（{rate(s['replied'], s['applied'])}）→ 採用 {s['hired']}件",
+        "うち新しいアカウント（{}以降の案件）：応募 {}件 → 返信 {}件 → 採用 {}件".format(NEW_ACCOUNT_SINCE[5:], *s["new_account"]),
     ]
     if s["replied"]:
         best = sorted(((n, a, r) for n, (a, r) in s["by_type"].items() if r), key=lambda x: (-x[2] / x[1], -x[2]))[:2]
@@ -161,6 +171,8 @@ def main() -> None:
     s = summarize(fetch_rows(), today)
     print(f"::notice title=全体::送れる案件 {s['pool']}件・今日の新着 {s['new_today']}件・"
           f"応募 {s['applied']}・返信 {s['replied']}・採用 {s['hired']}・返信率 {rate(s['replied'], s['applied'])}")
+    a, rp, h = s["new_account"]
+    print(f"::notice title=新しいアカウント（{NEW_ACCOUNT_SINCE}以降に集めた案件）::応募 {a}・返信 {rp}・採用 {h}・返信率 {rate(rp, a)}")
     print(f"::notice title=種類別の返信率::{breakdown(s['by_type'])}")
     print(f"::notice title=予算別の返信率::{breakdown(s['by_budget'])}")
     print(f"::notice title=応募者数別の返信率::{breakdown(s['by_applicants'])}")

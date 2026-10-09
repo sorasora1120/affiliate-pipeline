@@ -624,15 +624,17 @@ def review_proposed_rows(
     margin_percent: float,
     margin_min_yen: int,
     margin_max_yen: int,
-) -> tuple[list[int], list[dict]]:
+) -> tuple[list[int], list[int], list[dict]]:
     """既に「提案済み」でまだ誰も手を付けていない（進捗ステージが空の）行を見直す。
 
     関連性チェックを入れる前に提案済みになった無関係な案件がビューアの
     「送れる案件」に残り続けるため、同じ基準で外す行番号一覧と、金額・提案文を
     最新の基準とテンプレートで付け直す候補一覧を返す。応募済み等、
     進捗ステージが付いた行は本人が既に動いているので触らない。
+    返り値は (無関係な行, 最低予算に届かない行, 付け直す候補)。
     """
     irrelevant_rows: list[int] = []
+    below_budget_rows: list[int] = []
     refreshed: list[dict] = []
     for idx, r in enumerate(rows, start=2):
         if r.get("ステータス") != PROPOSED_STATUS or r.get("進捗ステージ"):
@@ -642,7 +644,12 @@ def review_proposed_rows(
             irrelevant_rows.append(idx)
             continue
         # 提案で出す金額は範囲の真ん中で、題名の金額は超えない（find_candidates と同じ考え方）
-        _, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
+        eligible, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
+        if eligible is not None and eligible < min_budget_yen:
+            # 最低予算を上げた時、まだ手を付けていない小さい案件を「送れる案件」から外す
+            # （2026-10-09、「1万円以上じゃなきゃダメ」とのことで5,000円→1万円にした）
+            below_budget_rows.append(idx)
+            continue
         if amount is not None:
             # 予算のある行も、提案文を最新のテンプレートで作り直す
             fee, margin, quote = split_amount(
@@ -663,7 +670,7 @@ def review_proposed_rows(
             "amount": None, "amount_estimate": est_amount, "fee": est_fee,
             "margin": est_margin, "quote": est_quote,
         })
-    return irrelevant_rows, refreshed
+    return irrelevant_rows, below_budget_rows, refreshed
 
 
 def proposal_and_worker_message(c: dict) -> tuple[str, str]:

@@ -205,6 +205,20 @@ class TitlePriceTest(unittest.TestCase):
         self.assertEqual(below, [2])
 
 
+class ReviewProposedBelowBudgetTest(unittest.TestCase):
+    # 2026-10-09、最低予算を1万円に上げた時、まだ手を付けていない小さい案件を「送れる案件」から外す
+    def test_untouched_small_jobs_are_moved_out(self):
+        from src.worker_matcher import review_proposed_rows
+        rows = [_row(ステータス="提案済み", 進捗ステージ="", 予算="5,000円"),
+                _row(ステータス="提案済み", 進捗ステージ="", 予算="10,000円 〜 30,000円"),
+                _row(ステータス="提案済み", 進捗ステージ="applied", 予算="5,000円"),
+                _row(ステータス="提案済み", 進捗ステージ="", タイトル="【税込8,000円】LPの修正", 予算="10,000円 〜 30,000円")]
+        irrelevant, below, refreshed = review_proposed_rows(rows, EXCLUDE, 10000, 20, 1000, 30000)
+        self.assertEqual(irrelevant, [])
+        self.assertEqual(below, [2, 5])
+        self.assertEqual([c["row"] for c in refreshed], [3])
+
+
 class RoughLineTest(unittest.TestCase):
     def test_matches_the_size_of_the_job(self):
         from src.worker_matcher import _rough_line

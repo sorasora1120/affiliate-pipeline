@@ -71,7 +71,8 @@ jobs:
           # 方が採用されやすく、最初の評価を取ることを優先する（手数料を引いても利益は残る）
           # 2026-10-08、15000→5000。返信が少ない（200件で3件）ため、評価0のうちは修正・更新などの
           # 小さい仕事で最初の評価を取る。小さい案件でもワーカーに渡す額が残るよう、利益の下限も3000→1000
-          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '5000' }}
+          # 2026-10-09、5000→10000（ユーザー「1万円以上じゃなきゃダメ」）。まだ手を付けていない提案済みの1万円未満の案件も外す
+          WORKER_MATCH_MIN_BUDGET_YEN: ${{ vars.WORKER_MATCH_MIN_BUDGET_YEN || '10000' }}
           WORKER_MATCH_MARGIN_PERCENT: ${{ vars.WORKER_MATCH_MARGIN_PERCENT || '20' }}
           WORKER_MATCH_MARGIN_MIN_YEN: ${{ vars.WORKER_MATCH_MARGIN_MIN_YEN || '1000' }}
           WORKER_MATCH_MARGIN_MAX_YEN: ${{ vars.WORKER_MATCH_MARGIN_MAX_YEN || '30000' }}

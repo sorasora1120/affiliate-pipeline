@@ -224,7 +224,7 @@ def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
     """未着手の「提案済み」行から無関係な案件を外し、残りの行の金額・提案文を
     最新の基準とテンプレートで付け直す。それぞれ1回のbatch_updateにまとめる（1行ずつ書くと
     Sheets APIの書き込みレート制限に当たるため）。"""
-    irrelevant_rows, refreshed = review_proposed_rows(
+    irrelevant_rows, below_budget_rows, refreshed = review_proposed_rows(
         rows,
         excluded_keywords=config.WORKER_MATCH_EXCLUDE_KEYWORDS,
         min_budget_yen=config.WORKER_MATCH_MIN_BUDGET_YEN,
@@ -232,15 +232,18 @@ def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
         margin_min_yen=config.WORKER_MATCH_MARGIN_MIN_YEN,
         margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
     )
-    if irrelevant_rows:
+    for target_rows, status, what in ((irrelevant_rows, EXCLUDED_KEYWORD_STATUS, "無関係な"),
+                                      (below_budget_rows, BELOW_BUDGET_STATUS, "最低予算に届かない")):
+        if not target_rows:
+            continue
         try:
             sheet.worksheet.batch_update(
-                [{"range": f"A{row}", "values": [[EXCLUDED_KEYWORD_STATUS]]} for row in irrelevant_rows],
+                [{"range": f"A{row}", "values": [[status]]} for row in target_rows],
                 value_input_option="RAW",
             )
-            logger.info("提案済みのうち無関係な%d件を「%s」に戻しました", len(irrelevant_rows), EXCLUDED_KEYWORD_STATUS)
+            logger.info("提案済みのうち%s%d件を「%s」に戻しました", what, len(target_rows), status)
         except Exception as exc:
-            logger.warning("無関係な提案済み行の更新に失敗しました: %s", exc)
+            logger.warning("%s提案済み行の更新に失敗しました: %s", what, exc)
     if refreshed:
         try:
             updates = []

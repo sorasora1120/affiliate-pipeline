@@ -148,7 +148,8 @@ WORKER_MATCH_EXCLUDE_KEYWORDS = [
 # （実データで確認: 提案済み250件中52件が3万円未満の提示だった＝現実的に無理な相場）。
 # マージン計算式 quote=amount-clamp(amount*20%,3000,30000) で
 # quote>=30000を満たすにはamountがおよそ37500円以上必要なため、40000円に設定。
-WORKER_MATCH_MIN_BUDGET_YEN = int(os.getenv("WORKER_MATCH_MIN_BUDGET_YEN", "40000"))
+# 2026-10-09、ワークフローの既定値（ユーザーの決めた1万円）にそろえた
+WORKER_MATCH_MIN_BUDGET_YEN = int(os.getenv("WORKER_MATCH_MIN_BUDGET_YEN", "10000"))
 # マージンは予算の一定割合を、下限〜上限の範囲でスライドさせる
 # （固定額だと小さい案件では割合が大きすぎ、大きい案件では小さすぎるため）
 # 2026-08-10: 上限を1万円→3万円に引き上げ。キーワード拡張後、予算50万〜100万円の
