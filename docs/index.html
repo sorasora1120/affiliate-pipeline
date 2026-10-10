@@ -494,17 +494,24 @@ function loadGvizJsonp() {
   });
 }
 
+// 除外語のうち、題名に「コーディング」「LPデザイン」があれば外さないもの（2026-10-10。affiliate-pipeline の
+// worker_matcher.py の SOFT_EXCLUDE_KEYWORDS と同じ。「画像加工＆コーディング」「記事LPのコーディング」
+// 「LPデザイン＆広告バナー制作」を落としていた。ほかの除外語にも当たる題名は外す）
+const SOFT_EXCLUDE_KEYWORDS = ["バナー", "画像加工", "記事LP"];
+
 function isExcluded(title) {
   // 英字だけの除外語（CFO・BASE など）は単語として出てきた時だけ当てる（2026-10-09、「ECFORCE」が「CFO」に当たっていた）
   const t = String(title || "");
   const low = t.normalize("NFKC").toLowerCase();
-  return WORKER_MATCH_EXCLUDE_KEYWORDS.some(k => {
+  const hits = WORKER_MATCH_EXCLUDE_KEYWORDS.filter(k => {
     if (/^[\x00-\x7f]+$/.test(k)) {
       const re = new RegExp("(^|[^a-z])" + k.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z])");
       return re.test(low);
     }
     return t.includes(k);
   });
+  if (!hits.length) return false;
+  return !(hits.every(k => SOFT_EXCLUDE_KEYWORDS.includes(k)) && /コーディング|lpデザイン/.test(low));
 }
 
 function slim(row, statusHint) {

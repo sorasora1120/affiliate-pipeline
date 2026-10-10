@@ -279,8 +279,26 @@ class TitleExcludedTest(unittest.TestCase):
         from src.worker_matcher import is_relevant_title, title_has_excluded
         for title in ["配信者・ライバー向けのウェブメディア・WebサービスのTOPページデザイン",
                       "【経験者歓迎】　自社ECサイト（ECFORCE使用）のLPコーディング担当者募集",
-                      "メルマガ登録フォーム付きのLP制作"]:
+                      "メルマガ登録フォーム付きのLP制作",
+                      # 2026-10-10、バナー・画像加工・記事LPに当たって落としていた
+                      "TOPページの原稿差し替えおよび画像加工＆コーディング",
+                      "記事LPのコーディングをお願いしたい。",
+                      "【セルフネイルブランド✨】LPデザイン＆広告バナー制作のお仕事"]:
             self.assertTrue(is_relevant_title(title) and not title_has_excluded(title, config.WORKER_MATCH_EXCLUDE_KEYWORDS), title)
+
+    def test_soft_keywords_still_exclude_unless_the_work_is_clear(self):
+        import config
+        from src.worker_matcher import excluded_hit
+        kws = config.WORKER_MATCH_EXCLUDE_KEYWORDS
+        # バナーだけ・文章を書く記事LP・「LP・バナー制作」のデザイナー募集は外れたまま
+        for title, hit in [("【継続依頼あり◎】暮らし・ひとり時間をテーマにしたWebバナー制作", "バナー"),
+                           ("D2Cブランド_記事LPの作成依頼", "記事LP"),
+                           ("【継続あり】場所や時間に縛られない働き方を目指すWebデザイナー募集｜LP・バナー制作", "バナー"),
+                           ("ECサイトの商品画像の画像加工", "画像加工"),
+                           # ほかの除外語にも当たれば、そちらの語で外れる
+                           ("LPデザイン・バナー制作｜時給1,500円〜", "時給"),
+                           ("【完全在宅】EC・広告クリエイティブ経験者歓迎✨LPデザイン・バナー制作", "広告クリエイティブ")]:
+            self.assertEqual(excluded_hit(title, kws), hit, title)
 
 
 class RecheckExcludedTest(unittest.TestCase):

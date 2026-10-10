@@ -51,6 +51,15 @@ def _normalize(title: str) -> str:
     return re.sub(r"word\s*press+", "wordpress", unicodedata.normalize("NFKC", title or "").lower())
 
 
+# 除外語のうち、題名に「コーディング」「LPデザイン」と制作の作業がはっきり書いてあれば外さないもの（2026-10-10）。
+# 成果のまとめの「制作の言葉があるのに除外語に当たった」67件を見たら、「TOPページの原稿差し替えおよび画像加工＆コーディング」
+# 「記事LPのコーディング」「LPデザイン＆広告バナー制作」を落としていた。バナーだけ・画像加工だけの仕事、文章を書く
+# 記事LPの作成、「LP・バナー制作」のデザイナー募集（長期・週○日）や、ほかの除外語（時給など）にも当たる題名は今までどおり外れる。
+# dispatch-viewer と docs の index.html の isExcluded も同じにしてある
+SOFT_EXCLUDE_KEYWORDS = ("バナー", "画像加工", "記事LP")
+_CLEAR_WORK_RE = re.compile(r"コーディング|lpデザイン")
+
+
 def excluded_hit(title: str, excluded_keywords: list[str]) -> str:
     """タイトルに入っている除外キーワード（無ければ空文字）。
 
@@ -59,13 +68,12 @@ def excluded_hit(title: str, excluded_keywords: list[str]) -> str:
     """
     t = title or ""
     low = unicodedata.normalize("NFKC", t).lower()
-    for kw in excluded_keywords:
-        if kw.isascii():
-            if re.search(rf"(?<![a-z]){re.escape(kw.lower())}(?![a-z])", low):
-                return kw
-        elif kw in t:
-            return kw
-    return ""
+    hits = [kw for kw in excluded_keywords
+            if (re.search(rf"(?<![a-z]){re.escape(kw.lower())}(?![a-z])", low) if kw.isascii() else kw in t)]
+    hard = [kw for kw in hits if kw not in SOFT_EXCLUDE_KEYWORDS]
+    if hits and not hard and _CLEAR_WORK_RE.search(low):
+        return ""
+    return (hard or hits or [""])[0]
 
 
 def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:

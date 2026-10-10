@@ -33,6 +33,8 @@
   `job_scraper/config.py`、`.github/workflows/cw_collect_attempt.yml` の `JOB_KEYWORDS` /
   `worker_match.yml` の `WORKER_MATCH_CATEGORIES`・`WORKER_MATCH_EXCLUDE_KEYWORDS`、
   `dispatch-viewer/index.html` の同名の JS 定数
+  （「題名に制作の作業がはっきり書いてあれば外さない」除外語 `worker_matcher.SOFT_EXCLUDE_KEYWORDS` も、
+  dispatch-viewer と docs の index.html の `SOFT_EXCLUDE_KEYWORDS`・`isExcluded` と揃える）
 - cron は毎時0分を避けて分をずらす（0分は数時間遅れたことがある）
 - スプレッドシートの列：S=応募者数、T=募集文。列を足すときは `SheetsWriter` が足りない列を追加する作りを保つ
 - テスト：`cd job_scraper && python -m unittest discover -s tests -v`。
