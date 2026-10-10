@@ -1,6 +1,6 @@
 import unittest
 
-from daily_stats import NEAR_MISS, discord_message, fit_annotation, recent_outcomes, summarize
+from daily_stats import NEAR_MISS, annotation_chunks, discord_message, fit_annotation, recent_outcomes, summarize
 
 
 def _r(stage="", status="提案済み", title="美容室のホームページ制作", budget="50,000円", date="2026-10-08", applicants="3"):
@@ -50,4 +50,11 @@ class FitAnnotationTest(unittest.TestCase):
         self.assertLessEqual(len(text.encode()), 80)
         self.assertEqual(text, " / ".join(["あ" * 10] * 2 + ["ほか3件"]))
         self.assertEqual(fit_annotation([]), "なし")
+
+    def test_chunks_use_more_annotations_before_counting_the_rest(self):
+        items = ["あ" * 10] * 5  # 1件30バイト、1つの注釈に2件（63バイト）まで
+        self.assertEqual(annotation_chunks(items, limit_bytes=70, max_chunks=2),
+                         [" / ".join(["あ" * 10] * 2), " / ".join(["あ" * 10] + ["ほか2件"])])
+        self.assertEqual(annotation_chunks(items[:2], limit_bytes=70, max_chunks=2), [" / ".join(["あ" * 10] * 2)])
+        self.assertEqual(annotation_chunks([], max_chunks=2), ["なし"])
 

@@ -191,25 +191,45 @@ def fit_annotation(items: list[str], limit_bytes: int = 4000) -> str:
     return " / ".join(out) or "なし"
 
 
+def annotation_chunks(items: list[str], limit_bytes: int = 4000, max_chunks: int = 1) -> list[str]:
+    """fit_annotation の、注釈を max_chunks 個まで使う版。入りきらない分は最後の注釈に件数で書く。"""
+    chunks: list[str] = []
+    rest = list(items)
+    while rest and len(chunks) < max_chunks - 1:
+        n = 1
+        while n < len(rest) and len(" / ".join(rest[:n + 1]).encode()) <= limit_bytes:
+            n += 1
+        chunks.append(" / ".join(rest[:n]))
+        rest = rest[n:]
+    if rest or not chunks:
+        chunks.append(fit_annotation(rest, limit_bytes))
+    return chunks
+
+
 def main() -> None:
+    # GitHub の注釈は1ステップ10個まで（2026-10-10、11個目に出した「送れる案件のタイトル」が出なかった）。
+    # 大事なものから出す。今は最大9個（全体・返信率・送れる案件・行き先・外れた案件4種、うち1種は2つまで）
     today = datetime.now(JST).strftime("%Y-%m-%d")
     since = (datetime.now(JST) - timedelta(days=1)).strftime("%Y-%m-%d")
-    recent = fetch_rows(f"select A,C,E,Q,R,S where Q >= '{since}'")
-    summary, dropped = recent_outcomes(recent, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
+    s = summarize(fetch_rows(), today)
+    a, rp, h = s["new_account"]
+    print(f"::notice title=全体::送れる案件 {s['pool']}件・今日の新着 {s['new_today']}件・"
+          f"応募 {s['applied']}・返信 {s['replied']}・採用 {s['hired']}・返信率 {rate(s['replied'], s['applied'])}"
+          f"｜{NEW_ACCOUNT_SINCE}以降に集めた案件への応募（親の名義・新しい提案文）：応募 {a}・返信 {rp}・採用 {h}・"
+          f"返信率 {rate(rp, a)}")
+    print(f"::notice title=返信率（種類別｜予算別｜応募者数別）::{breakdown(s['by_type'])} ｜ "
+          f"{breakdown(s['by_budget'])} ｜ {breakdown(s['by_applicants'])}")
+    # 変な案件が混ざっていないか、Claudeの定期チェックで目で確かめるため
+    print(f"::notice title=送れる案件のタイトル（新しい順）::{fit_annotation(list(reversed(s['pool_titles'])))}")
+    summary, dropped = recent_outcomes(fetch_rows(f"select A,C,E,Q,R,S where Q >= '{since}'"),
+                                       config.WORKER_MATCH_EXCLUDE_KEYWORDS)
     print(f"::notice title={since}以降に集めた案件の行き先::{summary}")
     for kind in DROP_KINDS:
-        items = dropped.get(kind, [])
-        print(f"::notice title=外れた案件：{kind}（{since}以降・{len(items)}件・新しい順）::{fit_annotation(items)}")
-    s = summarize(fetch_rows(), today)
-    print(f"::notice title=全体::送れる案件 {s['pool']}件・今日の新着 {s['new_today']}件・"
-          f"応募 {s['applied']}・返信 {s['replied']}・採用 {s['hired']}・返信率 {rate(s['replied'], s['applied'])}")
-    a, rp, h = s["new_account"]
-    print(f"::notice title={NEW_ACCOUNT_SINCE}以降に集めた案件への応募（親の名義・新しい提案文）::応募 {a}・返信 {rp}・採用 {h}・返信率 {rate(rp, a)}")
-    print(f"::notice title=種類別の返信率::{breakdown(s['by_type'])}")
-    print(f"::notice title=予算別の返信率::{breakdown(s['by_budget'])}")
-    print(f"::notice title=応募者数別の返信率::{breakdown(s['by_applicants'])}")
-    # 変な案件が混ざっていないか、Claudeの定期チェックで目で確かめるため（新しい順に最大60件）
-    print(f"::notice title=送れる案件のタイトル::{' / '.join(reversed(s['pool_titles'][-60:]))}")
+        items = list(dict.fromkeys(dropped.get(kind, [])))  # 同じ募集が何度も出るので1つにまとめる
+        chunks = annotation_chunks(items, max_chunks=2 if kind == NEAR_MISS else 1)
+        for i, chunk in enumerate(chunks, 1):
+            part = f"・{i}/{len(chunks)}" if len(chunks) > 1 else ""
+            print(f"::notice title=外れた案件：{kind}（{since}以降・{len(items)}件・新しい順{part}）::{chunk}")
     if os.getenv("SEND_DISCORD") == "1":
         from src.notifier import notify_discord
         notify_discord(discord_message(s, today))
