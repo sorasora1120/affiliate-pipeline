@@ -237,11 +237,38 @@ _TYPE_TEXT: dict[str, dict] = {
         "samples": ["accounting"],
         "team": ["skyfox", "gipsyqueens"],
     },
+    "fix": {
+        "plan": "今のサイトの確認 → 作業の範囲を確認 → バックアップ → 修正 → PC・スマホで表示確認 → 完了のご報告",
+        "point": "修正や更新は、頼まれた所だけを確実に直し、ほかの所を壊さないことが一番大事だと思っています。",
+        "questions": ["今のサイトのURLと、直したい所", "サーバーや管理画面（WordPressなど）にログインできるかどうか"],
+        "samples": ["accounting"],
+        "team": ["skyfox", "gipsyqueens"],
+    },
+    "coding": {
+        "plan": "デザインの確認 → HTML・CSSでコーディング → PC・スマホ・主なブラウザで表示確認 → 納品",
+        "point": "いただいたデザインを、PCでもスマホでもずれなく再現し、あとから直しやすいコードでお渡しします。",
+        "questions": ["デザインデータの形式（Figma・XD・画像など）と、ページ数", "サーバーへのアップロードまで必要かどうか"],
+        "samples": ["accounting"],
+        "team": ["skyfox", "gipsyqueens"],
+    },
 }
+
+# 作るのではなく、今あるサイトの修正・更新や、いただいたデザインのコーディングだけの依頼（2026-10-10）。
+# それまでは「お店」「LP」や「その他」の型に入り、「最初の画面で誰のためのサイトかを言い切る」「スマホから先に設計」
+# のような新しく作る時の提案文になっていて、作業の中身（差し替え・コーディング）に一言も触れていなかった。
+# 題名に新しく作る言葉（制作・作成・構築・新規・リニューアル）があれば、今までどおり業種の型を使う
+_BUILD_RE = re.compile(r"リニューアル|制作|作成|構築|新規|立ち上げ")
+_FIX_RE = re.compile(r"修正|更新|追加|差し替え|差替|変更|移行|流し込み|不具合|表示崩れ|カスタマイズ|改善")
+_CODING_RE = re.compile(r"コーディング|(?<![a-z])(?:html|css|javascript|js)(?![a-z])|レスポンシブ|実装")
 
 
 def job_type(title: str) -> str:
     t = _normalize(title)
+    if not _BUILD_RE.search(t):
+        if _FIX_RE.search(t):
+            return "fix"
+        if _CODING_RE.search(t):
+            return "coding"
     for key, words in _JOB_TYPES:
         for w in words:
             if w.isascii():
@@ -359,7 +386,19 @@ _PITCH: dict[str, dict] = {
         "hook": "サイトに来た人は、最初の3秒で「自分に関係あるか」を決める",
         "ideas": ["最初の画面で、誰のためのサイトかを言い切る", "スマホの画面から先に設計する", "「まずは相談だけでもOK」の一言で連絡しやすく"],
     },
+    "fix": {
+        "hook": "修正や更新は「頼んだ所だけが、確実に・早く直る」ことが一番大事だ",
+        "ideas": ["作業の前にバックアップを取って、今のページを壊さずに進める", "PC・スマホの両方で表示を確かめてからお渡し",
+                  "直した所の一覧をお送りして、確認しやすく"],
+    },
+    "coding": {
+        "hook": "コーディングは、デザインの細かい余白や文字の大きさまで、そのまま再現できるかが一番大事だ",
+        "ideas": ["デザインの通りに、PC・スマホの両方でずれなく組む", "Chrome・Safari など主なブラウザで表示を確かめてからお渡し",
+                  "あとから直しやすい、整理されたHTML・CSSで納品"],
+    },
 }
+# 作業だけの依頼では、募集文に合わせた入れ替え（インスタ連携・SEO・雰囲気づくりなど、新しく作る時の話）をしない
+_WORK_ONLY_TYPES = ("fix", "coding")
 # 募集文に出てくる言葉 → その案件に合わせた一行（業種の型より優先して、最大2つ入れ替える）
 _IDEA_EXTRAS: list[tuple[list[str], str]] = [
     (["instagram", "インスタ"], "インスタの最新投稿をサイトに自動で表示"),
@@ -420,6 +459,8 @@ def adapt_plan(plan: str, description: str) -> tuple[str, list[str]]:
 def pick_ideas(job_key: str, description: str) -> list[str]:
     """業種ごとの「大事にする3つ」のうち、募集文に合うものがあれば後ろから最大2つ入れ替える。"""
     base = list(_PITCH[job_key]["ideas"])
+    if job_key in _WORK_ONLY_TYPES:
+        return base
     desc = _normalize(description)
     def hit(w: str) -> bool:
         # 英字は単語として一致したときだけ（"online" の中の "line" などに反応しない）
@@ -437,8 +478,7 @@ def _rough_line(title: str) -> str:
     t = _normalize(title)
     if re.search(r"ファーストビュー|メインビジュアル|(?<![a-z])(?:fv|mv)(?![a-z])", t):
         return "ご契約前に、ファーストビューのラフをお見せできます。"
-    if (re.search(r"修正|更新|追加|差し替え|変更|移行|流し込み|改善|設定|フォーム", t)
-            and not re.search(r"リニューアル|制作|作成|構築|新規", t)):
+    if job_type(title) in _WORK_ONLY_TYPES or (re.search(r"設定|フォーム", t) and not _BUILD_RE.search(t)):
         return "ご契約前に、作業の範囲と手順を箇条書きでお送りします。"
     if job_type(title) == "lp":
         return "ご契約前に、LPの構成図（ラフ）をお見せできます。"

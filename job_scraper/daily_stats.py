@@ -38,8 +38,8 @@ REPLIED = {"replied", "hired", "ordered"}
 HIRED = {"hired", "ordered"}
 TYPE_JA = {
     "ec": "ネットショップ", "lp": "LP", "nocode": "STUDIO等", "recruit": "採用サイト",
-    "renewal": "リニューアル・修正", "shop": "お店", "corporate": "会社", "wordpress": "WordPress",
-    "default": "その他",
+    "renewal": "リニューアル", "shop": "お店", "corporate": "会社", "wordpress": "WordPress",
+    "fix": "修正・更新", "coding": "コーディング", "default": "その他",
 }
 
 

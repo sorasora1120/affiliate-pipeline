@@ -136,6 +136,43 @@ class PickIdeasTest(unittest.TestCase):
         ideas = pick_ideas("corporate", "Online meeting OK. deadline is flexible. 海外在住の方も歓迎です")
         self.assertEqual(ideas, _PITCH["corporate"]["ideas"])
 
+    def test_work_only_jobs_keep_their_own_three_points(self):
+        from src.worker_matcher import pick_ideas, _PITCH
+        self.assertEqual(pick_ideas("fix", "集客のためにインスタとLINEのボタンも直したい"), _PITCH["fix"]["ideas"])
+
+
+class WorkOnlyJobTypeTest(unittest.TestCase):
+    """2026-10-10、修正・更新やコーディングだけの依頼にも、新しく作る時の提案文（「誰のためのサイトかを言い切る」
+    「スマホから先に設計」）が入っていたため、専用の型を足した。"""
+
+    def test_fix_and_coding_jobs_get_their_own_type(self):
+        from src.worker_matcher import job_type
+        for title, want in [("会社HPの修正", "fix"),
+                            ("TOPページの原稿差し替えおよび画像加工＆コーディング", "fix"),
+                            ("【WordPress】記事一覧ページに検索機能を追加", "fix"),
+                            ("美容室ホームページの更新", "fix"),
+                            ("【Webデザイン・コーディング】既存デザイン2案のブラッシュアップ｜HTML/CSS/JavaScriptコーディング", "coding"),
+                            ("LPのHTMLコーディング＋サーバー", "coding"),
+                            # 新しく作る依頼は、今までどおり業種の型
+                            ("美容サロンのLP制作（デザイン・コーディング）", "lp"),
+                            ("コーポレートサイトのリニューアル", "renewal"),
+                            ("カフェのホームページ制作", "shop")]:
+            self.assertEqual(job_type(title), want, title)
+
+    def test_coding_proposal_talks_about_the_work_not_a_new_site(self):
+        from src.worker_matcher import proposal_and_worker_message
+        c = {"row": 2, "platform": "CrowdWorks", "category": "HTMLコーディング",
+             "title": "【Webデザイン・コーディング】既存デザイン2案のブラッシュアップ｜HTML/CSS/JavaScriptコーディング",
+             "url": "https://crowdworks.jp/public/jobs/1", "client_name": "テスト", "rating": "", "order_count": "",
+             "description": "既存のデザイン案をブラッシュアップしてコーディングしてほしいです。集客にも力を入れたいです。",
+             "amount": 75000, "fee": 15000, "margin": 15000, "quote": 45000}
+        proposal, _ = proposal_and_worker_message(c)
+        self.assertIn("コーディングは", proposal)
+        self.assertIn("デザインデータの形式", proposal)
+        self.assertIn("作業の範囲と手順", proposal)
+        self.assertNotIn("誰のためのサイトか", proposal)
+        self.assertNotIn("構成図", proposal)
+
 
 class RedFlagTest(unittest.TestCase):
     def test_flags_unpaid_and_off_platform(self):
