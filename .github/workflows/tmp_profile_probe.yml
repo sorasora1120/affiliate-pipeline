@@ -1,0 +1,42 @@
+name: 一時チェック（プロフィール）
+
+# 2026-10-10、プロフィール（一言・職種・本人確認など）がどこまで直っているかを公開ページで確かめる。確認後に消す。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - working-directory: job_scraper
+        run: pip install -r requirements.txt && playwright install chromium --with-deps
+      - name: 調べる
+        working-directory: job_scraper
+        run: |
+          python3 - <<'EOF'
+          from playwright.sync_api import sync_playwright
+          out = []
+          with sync_playwright() as pw:
+              b = pw.chromium.launch(headless=True)
+              pg = b.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36", locale="ja-JP").new_page()
+              for path in ["", "/portfolios"]:
+                  pg.goto("https://crowdworks.jp/public/employees/6831717" + path, wait_until="domcontentloaded", timeout=30000)
+                  pg.wait_for_timeout(3000)
+                  if "403" in (pg.title() or ""):
+                      raise SystemExit("403（このランナーはブロックされている）")
+                  main = pg.locator("main").first if pg.locator("main").count() else pg.locator("body")
+                  text = " ".join(main.inner_text().split())
+                  for i in range(0, min(len(text), 4500), 1500):
+                      out.append(f"{'ポートフォリオ' if path else 'プロフィール'}{i // 1500 + 1}::{text[i:i + 1500]}")
+              b.close()
+          open("probe.txt", "w").write("\n".join(o.replace("\r", "") for o in out) + "\n")
+          EOF
+      - name: 結果
+        working-directory: job_scraper
+        run: while IFS= read -r line; do msg=${line#*::}; echo "::notice title=${line%%::*}::${msg//%/%25}"; done < probe.txt
