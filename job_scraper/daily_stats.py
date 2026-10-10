@@ -43,8 +43,9 @@ TYPE_JA = {
 }
 
 
-def fetch_rows(tq: str = "select A,C,E,Q,R,S where A = '提案済み' or R != ''") -> list[dict]:
-    """既定では、提案済みの行と、進捗ステージが付いた行だけを読む。"""
+def fetch_rows(tq: str = "select A,C,E,Q,R,S,N where A = '提案済み' or R != ''") -> list[dict]:
+    """既定では、提案済みの行と、進捗ステージが付いた行だけを読む。列は A,C,E,Q,R,S,N の順（N=ワーカー提示額。
+    マッチングで提案文を作った行にだけ入る）。"""
     query = urllib.parse.urlencode({"tqx": "out:json", "sheet": SHEET_NAME, "tq": tq})
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?{query}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -60,7 +61,7 @@ def fetch_rows(tq: str = "select A,C,E,Q,R,S where A = '提案済み' or R != ''
             return str(c["f"])
         return "" if c.get("v") is None else str(c["v"])
 
-    keys = ["status", "title", "budget", "date", "stage", "applicants"]
+    keys = ["status", "title", "budget", "date", "stage", "applicants", "quote"]
     rows = []
     for r in data["table"]["rows"]:
         cells = [val(c) for c in (r.get("c") or [])]
@@ -149,6 +150,9 @@ def discord_message(s: dict, today: str) -> str:
 # フィルタで外れた案件の外れ方（注釈に出す順）
 NEAR_MISS = "制作の言葉があるのに除外語に当たった"
 DROP_KINDS = (NEAR_MISS, "予算未達", "要注意", "制作の言葉が無い")
+# 提案文まで作って「送れる案件」に出したのに、応募しないまま募集が締め切られた案件（2026-10-10）。
+# 多ければ、案件の数より応募するタイミングが足りていない
+MISSED = "応募しないまま締め切られた"
 
 
 def recent_outcomes(rows: list[dict], excluded_keywords: list[str]) -> tuple[str, dict[str, list[str]]]:
@@ -175,6 +179,8 @@ def recent_outcomes(rows: list[dict], excluded_keywords: list[str]) -> tuple[str
             dropped["予算未達"].append(f"{title}（{r['budget'] or '予算なし'}）")
         elif status == "対象外（要注意）":
             dropped["要注意"].append(title)
+        elif status == "対象外（募集終了）" and not r["stage"].strip() and r.get("quote", "").strip():
+            dropped[MISSED].append(title)
     # 「サイト」「Web」はあるのに作業の言葉が無くて落ちた案件を先に出す（取りこぼしがあるならここ。2026-10-10）。
     # 何も無いもの（Instagram投稿・アンケートなど）は後ろ。並べ替えは安定なので、それぞれの中では新しい順のまま
     dropped["制作の言葉が無い"].sort(key=lambda t: not has_weak_web_word(t))
@@ -224,9 +230,11 @@ def main() -> None:
           f"{breakdown(s['by_budget'])} ｜ {breakdown(s['by_applicants'])}")
     # 変な案件が混ざっていないか、Claudeの定期チェックで目で確かめるため
     print(f"::notice title=送れる案件のタイトル（新しい順）::{fit_annotation(list(reversed(s['pool_titles'])))}")
-    summary, dropped = recent_outcomes(fetch_rows(f"select A,C,E,Q,R,S where Q >= '{since}'"),
+    summary, dropped = recent_outcomes(fetch_rows(f"select A,C,E,Q,R,S,N where Q >= '{since}'"),
                                        config.WORKER_MATCH_EXCLUDE_KEYWORDS)
-    print(f"::notice title={since}以降に集めた案件の行き先::{summary}")
+    missed = list(dict.fromkeys(dropped.get(MISSED, [])))
+    head = f"{summary} ｜ うち送れる案件に出したのに{MISSED} {len(missed)}件："
+    print(f"::notice title={since}以降に集めた案件の行き先::{head}{fit_annotation(missed, 4000 - len(head.encode()))}")
     for kind in DROP_KINDS:
         items = list(dict.fromkeys(dropped.get(kind, [])))  # 同じ募集が何度も出るので1つにまとめる
         chunks = annotation_chunks(items, max_chunks=2 if kind == NEAR_MISS else 1)

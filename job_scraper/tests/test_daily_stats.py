@@ -1,10 +1,12 @@
 import unittest
 
-from daily_stats import NEAR_MISS, annotation_chunks, discord_message, fit_annotation, recent_outcomes, summarize
+from daily_stats import MISSED, NEAR_MISS, annotation_chunks, discord_message, fit_annotation, recent_outcomes, summarize
 
 
-def _r(stage="", status="提案済み", title="美容室のホームページ制作", budget="50,000円", date="2026-10-08", applicants="3"):
-    return {"status": status, "title": title, "budget": budget, "date": date, "stage": stage, "applicants": applicants}
+def _r(stage="", status="提案済み", title="美容室のホームページ制作", budget="50,000円", date="2026-10-08", applicants="3",
+       quote=""):
+    return {"status": status, "title": title, "budget": budget, "date": date, "stage": stage, "applicants": applicants,
+            "quote": quote}
 
 
 class SummarizeTest(unittest.TestCase):
@@ -42,6 +44,14 @@ class RecentOutcomesTest(unittest.TestCase):
         self.assertEqual(dropped["制作の言葉が無い"], ["Webサイトの不具合を見てほしい", "ブログの文章作成"])
         self.assertEqual(dropped["予算未達"], ["安い案件（5,000円）"])
         self.assertEqual(dropped["要注意"], ["成果報酬のLP"])
+
+    def test_counts_pool_jobs_that_closed_before_anyone_applied(self):
+        end = "対象外（募集終了）"
+        rows = [_r(status=end, title="出したのに締め切られたLP", quote="8000"),
+                _r("applied", status=end, title="応募してから締め切られたLP", quote="8000"),
+                _r(status=end, title="マッチング前に締め切られたLP", quote="")]
+        _, dropped = recent_outcomes(rows, [])
+        self.assertEqual(dropped[MISSED], ["出したのに締め切られたLP"])
 
 
 class FitAnnotationTest(unittest.TestCase):
