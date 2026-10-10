@@ -1,0 +1,23 @@
+name: 今日のXの投稿をDiscordに送る
+
+# 2026-10-10追加。sales.html の「今日の投稿」から今日の1つを選び、本文と、Xの投稿画面が文面入りで開くリンクを
+# Discord に送る（x_daily_post.py）。投稿ボタンは本人が押す（自動投稿はしない）。
+# GitHub の schedule は何時間も遅れるので使わず、Claudeの毎時の定期チェックが日本時間11時台に動かす。
+on:
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 送る
+        working-directory: job_scraper
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.JOB_SCRAPER_DISCORD_WEBHOOK_URL }}
+        run: python x_daily_post.py

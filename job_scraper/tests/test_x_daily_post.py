@@ -1,0 +1,22 @@
+import unittest
+from datetime import datetime, timezone
+
+from x_daily_post import load_posts, message, today_index
+
+
+class XDailyPostTest(unittest.TestCase):
+    def test_reads_posts_from_the_page_script(self):
+        html = 'var X_DAILY = [\n    "一つ目\\nの投稿",\n    "二つ目「です」",\n  ];\n  var xToday = 0;'
+        self.assertEqual(load_posts(html), ["一つ目\nの投稿", "二つ目「です」"])
+
+    def test_day_changes_at_midnight_in_japan(self):
+        # 日本時間 10-09 23:30 と 10-10 00:30 は別の日（ページの決め方と同じ）
+        before = datetime(2026, 10, 9, 14, 30, tzinfo=timezone.utc).timestamp()
+        after = datetime(2026, 10, 9, 15, 30, tzinfo=timezone.utc).timestamp()
+        self.assertNotEqual(today_index(2, before), today_index(2, after))
+
+    def test_message_has_a_prefilled_post_link(self):
+        text = message("ホームページの投稿", 0, 30)
+        self.assertIn("https://x.com/intent/tweet?text=%E3%83%9B", text)
+        self.assertIn("（1/30）", text)
+        self.assertTrue(text.endswith("ホームページの投稿"))
