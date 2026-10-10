@@ -5,9 +5,9 @@ from x_daily_post import load_posts, message, today_index
 
 
 class XDailyPostTest(unittest.TestCase):
-    def test_reads_posts_from_the_page_script(self):
-        html = 'var X_DAILY = [\n    "一つ目\\nの投稿",\n    "二つ目「です」",\n  ];\n  var xToday = 0;'
-        self.assertEqual(load_posts(html), ["一つ目\nの投稿", "二つ目「です」"])
+    def test_reads_posts_from_the_shared_file(self):
+        js = 'var X_DAILY = [\n  "一つ目\\nの投稿",\n  "二つ目「です」",\n];\nfunction xTodayIndex() {}'
+        self.assertEqual(load_posts(js), ["一つ目\nの投稿", "二つ目「です」"])
 
     def test_day_changes_at_midnight_in_japan(self):
         # 日本時間 10-09 23:30 と 10-10 00:30 は別の日（ページの決め方と同じ）

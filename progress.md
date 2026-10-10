@@ -45,7 +45,7 @@
 - **成果のまとめ**（`daily_stats.yml`）：応募→返信→採用の数と、種類・予算・応募者数ごとの返信率を Discord に送る。
   2026-10-10から schedule は無し。GitHub側で5時間遅れて夜中4時に届いていたので、Claudeの毎時チェックが日本時間22時台に send_discord=1 で動かす。
   手動実行（send_discord=0）だと注釈（::notice）に出すだけ → Claude の定期チェックは check-runs の annotations API で読む
-- **今日のXの投稿**（`x_daily_post.yml` → `x_daily_post.py`、2026-10-10）：dispatch-viewer の sales.html の `X_DAILY`（30案）から
+- **今日のXの投稿**（`x_daily_post.yml` → `x_daily_post.py`、2026-10-10）：dispatch-viewer の `x_posts.js` の `X_DAILY`（30案。営業ページとビューアも同じファイル）から
   日本の日付で今日の1つを選び、本文と「Xの投稿画面が文面入りで開くリンク」を Discord に送る。投稿ボタンは本人が押す（自動投稿はしない）。
   schedule は使わず、Claudeの毎時チェックが日本時間11時台に動かす
 - **募集終了チェック**（`check_expired.yml`、JST 11:37 / 16:37 / 22:37）: 終了した案件に印を付け、S/T列も更新

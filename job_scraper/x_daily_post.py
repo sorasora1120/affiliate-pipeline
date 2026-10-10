@@ -1,7 +1,7 @@
 """今日のXの投稿を Discord に送る（2026-10-10、「毎日何か投稿した方がいい？」「それ作る設定して」とのこと）。
 
-dispatch-viewer の sales.html にある「今日の投稿」（X_DAILY の30案）から、ページと同じ決め方（日本の日付）で
-今日の1つを選び、本文と「タップするとXの投稿画面が文面入りで開くリンク」を送る。文面はページ側の1か所だけで持つ。
+dispatch-viewer の x_posts.js にある「今日の投稿」（X_DAILY の30案。営業ページとビューアも同じファイルを使う）から、
+ページと同じ決め方（日本の日付）で今日の1つを選び、本文と「タップするとXの投稿画面が文面入りで開くリンク」を送る。
 投稿ボタンを押すのは本人（Xへの自動投稿やDMの自動送信はアカウント停止の原因になるので、このプロジェクトではやらない）。
 x_daily_post.yml（手動）から動き、Claudeの毎時の定期チェックが日本時間11時台に動かす。
 """
@@ -14,13 +14,13 @@ import urllib.request
 
 from src.notifier import notify_discord
 
-SALES_URL = "https://raw.githubusercontent.com/sorasora1120/dispatch-viewer/main/sales.html"
+POSTS_URL = "https://raw.githubusercontent.com/sorasora1120/dispatch-viewer/main/x_posts.js"
 
 
-def load_posts(html: str) -> list[str]:
-    body = re.search(r"var X_DAILY = \[(.*?)\n  \];", html, re.S)
+def load_posts(js: str) -> list[str]:
+    body = re.search(r"var X_DAILY = \[(.*?)\n\s*\];", js, re.S)
     if not body:
-        raise RuntimeError("sales.html に X_DAILY が見つかりませんでした")
+        raise RuntimeError("x_posts.js に X_DAILY が見つかりませんでした")
     return [json.loads(s) for s in re.findall(r'^\s*("(?:[^"\\]|\\.)*"),\s*$', body.group(1), re.M)]
 
 
@@ -36,10 +36,10 @@ def message(post: str, index: int, count: int) -> str:
 
 
 def main() -> None:
-    html = urllib.request.urlopen(
-        urllib.request.Request(SALES_URL, headers={"User-Agent": "affiliate-pipeline"}), timeout=30
+    js = urllib.request.urlopen(
+        urllib.request.Request(POSTS_URL, headers={"User-Agent": "affiliate-pipeline"}), timeout=30
     ).read().decode("utf-8")
-    posts = load_posts(html)
+    posts = load_posts(js)
     i = today_index(len(posts))
     text = message(posts[i], i, len(posts))
     print(f"::notice title=今日のXの投稿（{i + 1}/{len(posts)}）::{posts[i][:80]}")
