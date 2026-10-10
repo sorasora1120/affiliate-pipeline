@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from x_daily_post import load_posts, message, today_index
+from x_daily_post import image_for, load_posts, message, today_index
 
 
 class XDailyPostTest(unittest.TestCase):
@@ -20,3 +20,10 @@ class XDailyPostTest(unittest.TestCase):
         self.assertIn("https://x.com/intent/tweet?text=%E3%83%9B", text)
         self.assertIn("（1/30）", text)
         self.assertTrue(text.endswith("ホームページの投稿"))
+
+    def test_sample_posts_come_with_their_image(self):
+        post = "サンプルです（架空の店舗です）。\nhttps://sorasora1120.github.io/salon.html"
+        self.assertTrue(image_for(post).endswith("/x-images/salon.jpg"))
+        self.assertIn("x-images/salon.jpg", message(post, 2, 39))
+        self.assertEqual(image_for("ホームページのコツ"), "")
+        self.assertNotIn("付ける画像", message("ホームページのコツ", 0, 39))
