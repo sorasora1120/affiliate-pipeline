@@ -1,0 +1,27 @@
+name: 案件をさがす（題名の一部で）
+
+# 2026-10-10追加。返信が来た案件の中身（予算・募集文・URL・進み具合）を、Claude が相談のときに確かめるため。
+# 見つかった行を GitHub の注釈に出すだけ（シートは書き換えない）。
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "題名の一部"
+        required: true
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests python-dotenv
+      - name: さがす
+        working-directory: job_scraper
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          QUERY: ${{ inputs.query }}
+        run: python find_job.py

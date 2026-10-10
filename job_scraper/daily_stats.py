@@ -43,9 +43,12 @@ TYPE_JA = {
 }
 
 
-def fetch_rows(tq: str = "select A,C,E,Q,R,S,N where A = '提案済み' or R != ''") -> list[dict]:
+DEFAULT_KEYS = ["status", "title", "budget", "date", "stage", "applicants", "quote"]
+
+
+def fetch_rows(tq: str = "select A,C,E,Q,R,S,N where A = '提案済み' or R != ''", keys: list[str] | None = None) -> list[dict]:
     """既定では、提案済みの行と、進捗ステージが付いた行だけを読む。列は A,C,E,Q,R,S,N の順（N=ワーカー提示額。
-    マッチングで提案文を作った行にだけ入る）。"""
+    マッチングで提案文を作った行にだけ入る）。別の列を読むときは、選んだ列の順に keys を渡す。"""
     query = urllib.parse.urlencode({"tqx": "out:json", "sheet": SHEET_NAME, "tq": tq})
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?{query}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -61,7 +64,7 @@ def fetch_rows(tq: str = "select A,C,E,Q,R,S,N where A = '提案済み' or R != 
             return str(c["f"])
         return "" if c.get("v") is None else str(c["v"])
 
-    keys = ["status", "title", "budget", "date", "stage", "applicants", "quote"]
+    keys = keys or DEFAULT_KEYS
     rows = []
     for r in data["table"]["rows"]:
         cells = [val(c) for c in (r.get("c") or [])]
