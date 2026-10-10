@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config  # noqa: E402
 from src.budget_utils import parse_budget_yen  # noqa: E402
-from src.worker_matcher import excluded_hit, is_relevant_title, job_type  # noqa: E402
+from src.worker_matcher import excluded_hit, has_weak_web_word, is_relevant_title, job_type  # noqa: E402
 
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID") or "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
 SHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME") or "案件一覧"
@@ -175,6 +175,9 @@ def recent_outcomes(rows: list[dict], excluded_keywords: list[str]) -> tuple[str
             dropped["予算未達"].append(f"{title}（{r['budget'] or '予算なし'}）")
         elif status == "対象外（要注意）":
             dropped["要注意"].append(title)
+    # 「サイト」「Web」はあるのに作業の言葉が無くて落ちた案件を先に出す（取りこぼしがあるならここ。2026-10-10）。
+    # 何も無いもの（Instagram投稿・アンケートなど）は後ろ。並べ替えは安定なので、それぞれの中では新しい順のまま
+    dropped["制作の言葉が無い"].sort(key=lambda t: not has_weak_web_word(t))
     summary = " / ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
     return summary or "なし", dropped
 
@@ -227,9 +230,12 @@ def main() -> None:
     for kind in DROP_KINDS:
         items = list(dict.fromkeys(dropped.get(kind, [])))  # 同じ募集が何度も出るので1つにまとめる
         chunks = annotation_chunks(items, max_chunks=2 if kind == NEAR_MISS else 1)
+        note = ""
+        if kind == "制作の言葉が無い":
+            note = f"・サイト/Webの言葉がある{sum(map(has_weak_web_word, items))}件が先"
         for i, chunk in enumerate(chunks, 1):
             part = f"・{i}/{len(chunks)}" if len(chunks) > 1 else ""
-            print(f"::notice title=外れた案件：{kind}（{since}以降・{len(items)}件・新しい順{part}）::{chunk}")
+            print(f"::notice title=外れた案件：{kind}（{since}以降・{len(items)}件{note}・新しい順{part}）::{chunk}")
     if os.getenv("SEND_DISCORD") == "1":
         from src.notifier import notify_discord
         notify_discord(discord_message(s, today))

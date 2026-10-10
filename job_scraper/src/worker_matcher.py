@@ -84,12 +84,21 @@ def _has_latin_word(t: str, words: list[str]) -> bool:
     return any(re.search(rf"(?<![a-z]){w}(?![a-z])", t) for w in words)
 
 
+def _has_weak_word(t: str) -> bool:
+    return any(w in t for w in _WEAK_WORDS_JA) or _has_latin_word(t, _WEAK_WORDS_LATIN)
+
+
 def is_relevant_title(title: str) -> bool:
     t = _normalize(title)
     if any(w in t for w in _RELEVANT_WORDS_JA) or _has_latin_word(t, _RELEVANT_WORDS_LATIN) or _PAGE_WORK_RE.search(t):
         return True
-    weak = any(w in t for w in _WEAK_WORDS_JA) or _has_latin_word(t, _WEAK_WORDS_LATIN)
-    return weak and any(w in t for w in _WORK_WORDS)
+    return _has_weak_word(t) and any(w in t for w in _WORK_WORDS)
+
+
+def has_weak_web_word(title: str) -> bool:
+    """「サイト」「Web」など、それだけでは制作の案件か分からない言葉があるか。
+    関連判定で落とした案件のうち、取りこぼしがありそうなもの（作業の言葉が無かっただけ）を見分けるのに使う。"""
+    return _has_weak_word(_normalize(title))
 
 
 # 予算未提示の案件の目安額（クライアントに提示する総額の想定）。一律の額だと

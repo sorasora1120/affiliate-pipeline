@@ -29,15 +29,17 @@ class RecentOutcomesTest(unittest.TestCase):
     def test_splits_filtered_titles_by_how_they_were_dropped(self):
         ex = "対象外（除外キーワード）"
         rows = [_r(), _r(status=ex, title="WEBデザイン講師募集"), _r(status=ex, title="セミナー集客のLP制作"),
-                _r(status=ex, title="アンケート回答のお願い"), _r(status=ex, title="ブログの文章作成"),
+                _r(status=ex, title="アンケート回答のお願い"), _r(status=ex, title="Webサイトの不具合を見てほしい"),
+                _r(status=ex, title="ブログの文章作成"),
                 _r(status="対象外（予算未達）", title="安い案件", budget="5,000円"),
                 _r(status="対象外（要注意）", title="成果報酬のLP")]
         summary, dropped = recent_outcomes(rows, ["講師募集", "セミナー", "アンケート回答", "成果報酬"])
         self.assertIn("提案済み 1", summary)
-        self.assertIn("対象外（除外キーワード） 4", summary)
+        self.assertIn("対象外（除外キーワード） 5", summary)
         # 新しい順（シートの下から）。除外語に当たり制作の言葉も無い「アンケート回答」は出さない
         self.assertEqual(dropped[NEAR_MISS], ["セミナー集客のLP制作 ←「セミナー」", "WEBデザイン講師募集 ←「講師募集」"])
-        self.assertEqual(dropped["制作の言葉が無い"], ["ブログの文章作成"])
+        # 「サイト」「Web」はあるのに作業の言葉が無くて落ちたものが先（取りこぼしがあるならここ）
+        self.assertEqual(dropped["制作の言葉が無い"], ["Webサイトの不具合を見てほしい", "ブログの文章作成"])
         self.assertEqual(dropped["予算未達"], ["安い案件（5,000円）"])
         self.assertEqual(dropped["要注意"], ["成果報酬のLP"])
 
