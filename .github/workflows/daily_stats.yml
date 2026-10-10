@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
+      - run: pip install requests python-dotenv  # config.py（除外語）を読むため
       - name: 集計
         working-directory: job_scraper
         env:

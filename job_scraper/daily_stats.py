@@ -20,8 +20,9 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import config  # noqa: E402
 from src.budget_utils import parse_budget_yen  # noqa: E402
-from src.worker_matcher import job_type  # noqa: E402
+from src.worker_matcher import excluded_hit, is_relevant_title, job_type  # noqa: E402
 
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID") or "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
 SHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME") or "案件一覧"
@@ -145,29 +146,60 @@ def discord_message(s: dict, today: str) -> str:
     return "\n".join(lines)
 
 
-def recent_outcomes(rows: list[dict]) -> tuple[str, list[str]]:
-    """直近に集めた案件が、どのステータスになったかの内訳と、フィルタで外れた案件のタイトル。
+# フィルタで外れた案件の外れ方（注釈に出す順）
+NEAR_MISS = "制作の言葉があるのに除外語に当たった"
+DROP_KINDS = (NEAR_MISS, "予算未達", "要注意", "制作の言葉が無い")
+
+
+def recent_outcomes(rows: list[dict], excluded_keywords: list[str]) -> tuple[str, dict[str, list[str]]]:
+    """直近に集めた案件が、どのステータスになったかの内訳と、フィルタで外れた案件（外れ方ごと・新しい順）。
 
     2026-10-09追加。朝の収集で送れる案件が1件も増えなかったため、新着が本当に少ないのか、
     フィルタ（除外語・関連判定・要注意）で外しすぎているのかを、定期チェックで見分けられるようにする。
+    2026-10-10、外れ方ごとに分けた。1つの一覧だと、除外語に当たった明らかに無関係な案件（eBayのリサーチ・
+    アンケートなど、約400件）で埋まり、良い案件を落としていそうな「制作の言葉があるのに除外語に当たった」
+    案件や予算未達の案件が見えなかったため。除外語に当たり制作の言葉も無い案件は出さない。
     """
     counts: dict[str, int] = defaultdict(int)
-    dropped = []
-    for r in rows:
-        counts[r["status"] or "（空）"] += 1
-        if r["status"] in ("対象外（除外キーワード）", "対象外（要注意）"):
-            dropped.append(f"[{r['status'][4:-1]}] {r['title']}")
+    dropped: dict[str, list[str]] = defaultdict(list)
+    for r in reversed(rows):  # シートは下ほど新しい
+        status, title = r["status"], r["title"]
+        counts[status or "（空）"] += 1
+        if status == "対象外（除外キーワード）":
+            hit, relevant = excluded_hit(title, excluded_keywords), is_relevant_title(title)
+            if hit and relevant:
+                dropped[NEAR_MISS].append(f"{title} ←「{hit}」")
+            elif not hit and not relevant:
+                dropped["制作の言葉が無い"].append(title)
+        elif status == "対象外（予算未達）":
+            dropped["予算未達"].append(f"{title}（{r['budget'] or '予算なし'}）")
+        elif status == "対象外（要注意）":
+            dropped["要注意"].append(title)
     summary = " / ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
     return summary or "なし", dropped
+
+
+def fit_annotation(items: list[str], limit_bytes: int = 4000) -> str:
+    """注釈の本文は4096バイトで切れる（2026-10-10実測）ので、入るだけ並べて残りは件数で書く。"""
+    out: list[str] = []
+    for i, item in enumerate(items):
+        after = len(items) - i - 1  # この項目のあとに残る件数
+        tail = f" / ほか{after}件" if after else ""
+        if len(" / ".join(out + [item]).encode()) + len(tail.encode()) > limit_bytes:
+            return " / ".join(out + [f"ほか{len(items) - i}件"])
+        out.append(item)
+    return " / ".join(out) or "なし"
 
 
 def main() -> None:
     today = datetime.now(JST).strftime("%Y-%m-%d")
     since = (datetime.now(JST) - timedelta(days=1)).strftime("%Y-%m-%d")
     recent = fetch_rows(f"select A,C,E,Q,R,S where Q >= '{since}'")
-    summary, dropped = recent_outcomes(recent)
+    summary, dropped = recent_outcomes(recent, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
     print(f"::notice title={since}以降に集めた案件の行き先::{summary}")
-    print(f"::notice title=フィルタで外れた案件（{since}以降・最大50件）::{' / '.join(dropped[-50:]) or 'なし'}")
+    for kind in DROP_KINDS:
+        items = dropped.get(kind, [])
+        print(f"::notice title=外れた案件：{kind}（{since}以降・{len(items)}件・新しい順）::{fit_annotation(items)}")
     s = summarize(fetch_rows(), today)
     print(f"::notice title=全体::送れる案件 {s['pool']}件・今日の新着 {s['new_today']}件・"
           f"応募 {s['applied']}・返信 {s['replied']}・採用 {s['hired']}・返信率 {rate(s['replied'], s['applied'])}")

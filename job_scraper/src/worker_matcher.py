@@ -51,8 +51,8 @@ def _normalize(title: str) -> str:
     return re.sub(r"word\s*press+", "wordpress", unicodedata.normalize("NFKC", title or "").lower())
 
 
-def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:
-    """除外キーワードがタイトルに入っているか。
+def excluded_hit(title: str, excluded_keywords: list[str]) -> str:
+    """タイトルに入っている除外キーワード（無ければ空文字）。
 
     英字だけのキーワード（CFO・COO・BASE など）は、単語として出てきた時だけ当てる。
     2026-10-09、「自社ECサイト（ECFORCE使用）のLPコーディング」が「CFO」に当たって外れていたため。
@@ -62,10 +62,14 @@ def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:
     for kw in excluded_keywords:
         if kw.isascii():
             if re.search(rf"(?<![a-z]){re.escape(kw.lower())}(?![a-z])", low):
-                return True
+                return kw
         elif kw in t:
-            return True
-    return False
+            return kw
+    return ""
+
+
+def title_has_excluded(title: str, excluded_keywords: list[str]) -> bool:
+    return bool(excluded_hit(title, excluded_keywords))
 
 
 def _has_latin_word(t: str, words: list[str]) -> bool:
