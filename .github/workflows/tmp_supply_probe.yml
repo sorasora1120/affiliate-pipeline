@@ -1,0 +1,28 @@
+name: 一時チェック（仕事の幅を広げたら案件が何件増えるか）
+
+# 2026-10-11、ユーザーに「案件すくないなあ」と言われて数えるための一時チェック。結果を読んだら消す
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: 依存パッケージ
+        working-directory: job_scraper
+        run: pip install -r requirements.txt && playwright install chromium --with-deps > /dev/null
+      - name: シート（外れた案件の種類）
+        working-directory: job_scraper
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: python tmp_supply_probe.py sheet > out1.txt 2>&1 || { tail -6 out1.txt | sed 's/^/::warning::/'; exit 1; }; cat out1.txt
+      - name: クラウドワークスのデザイン系カテゴリ
+        if: always()
+        working-directory: job_scraper
+        run: python tmp_supply_probe.py cw > out2.txt 2>&1 || { tail -6 out2.txt | sed 's/^/::warning::/'; exit 1; }; cat out2.txt
