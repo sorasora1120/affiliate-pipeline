@@ -20,7 +20,7 @@ jobs:
       - name: 調べる
         working-directory: job_scraper
         run: |
-          python3 - <<'EOF'
+          cat > probe.py <<'EOF'
           import json, re, time, urllib.parse, urllib.request
           from urllib.parse import quote
           from playwright.sync_api import sync_playwright
@@ -93,6 +93,7 @@ jobs:
           with open("probe.txt", "w") as f:
               f.write("\n".join(lines) + "\n")
           EOF
+          python3 probe.py > out.txt 2>&1 || { tail -6 out.txt | sed 's/^/::warning::/'; exit 1; }
       - name: 結果1
         working-directory: job_scraper
         run: sed -n '1,9p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
