@@ -511,7 +511,8 @@ function isExcluded(title) {
     return t.includes(k);
   });
   if (!hits.length) return false;
-  return !(hits.every(k => SOFT_EXCLUDE_KEYWORDS.includes(k)) && /コーディング|lpデザイン/.test(low));
+  // 2026-10-12、「LP＆広告バナーデザイン」「LP・バナーデザイン」も外さない（「LP・バナー制作」のデザイナー募集は外れたまま）
+  return !(hits.every(k => SOFT_EXCLUDE_KEYWORDS.includes(k)) && /コーディング|lpデザイン|lp\s*[&・\/と]?\s*(?:広告)?\s*バナーデザイン/.test(low));
 }
 
 function slim(row, statusHint) {

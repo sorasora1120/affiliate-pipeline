@@ -56,8 +56,10 @@ def _normalize(title: str) -> str:
 # 「記事LPのコーディング」「LPデザイン＆広告バナー制作」を落としていた。バナーだけ・画像加工だけの仕事、文章を書く
 # 記事LPの作成、「LP・バナー制作」のデザイナー募集（長期・週○日）や、ほかの除外語（時給など）にも当たる題名は今までどおり外れる。
 # dispatch-viewer と docs の index.html の isExcluded も同じにしてある
+# 2026-10-12、「LP＆広告バナーデザイン」「LP・バナーデザイン」（LPのデザインにバナーが付く仕事）も外さない。
+# 「LP・バナー制作」のデザイナー募集は今までどおり外れる
 SOFT_EXCLUDE_KEYWORDS = ("バナー", "画像加工", "記事LP")
-_CLEAR_WORK_RE = re.compile(r"コーディング|lpデザイン")
+_CLEAR_WORK_RE = re.compile(r"コーディング|lpデザイン|lp\s*[&・/と]?\s*(?:広告)?\s*バナーデザイン")
 
 
 def excluded_hit(title: str, excluded_keywords: list[str]) -> str:

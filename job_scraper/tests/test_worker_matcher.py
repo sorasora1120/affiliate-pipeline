@@ -320,7 +320,10 @@ class TitleExcludedTest(unittest.TestCase):
                       # 2026-10-10、バナー・画像加工・記事LPに当たって落としていた
                       "TOPページの原稿差し替えおよび画像加工＆コーディング",
                       "記事LPのコーディングをお願いしたい。",
-                      "【セルフネイルブランド✨】LPデザイン＆広告バナー制作のお仕事"]:
+                      "【セルフネイルブランド✨】LPデザイン＆広告バナー制作のお仕事",
+                      # 2026-10-12、LPのデザインにバナーが付く仕事
+                      "【オーダーメイド香水✨】香りづくり体験のLP＆広告バナーデザイン",
+                      "【初心者もOK】ECサイトの商品紹介に使用するLP・バナーデザインをお任せします！"]:
             self.assertTrue(is_relevant_title(title) and not title_has_excluded(title, config.WORKER_MATCH_EXCLUDE_KEYWORDS), title)
 
     def test_soft_keywords_still_exclude_unless_the_work_is_clear(self):
@@ -332,6 +335,8 @@ class TitleExcludedTest(unittest.TestCase):
                            ("D2Cブランド_記事LPの作成依頼", "記事LP"),
                            ("【継続あり】場所や時間に縛られない働き方を目指すWebデザイナー募集｜LP・バナー制作", "バナー"),
                            ("ECサイトの商品画像の画像加工", "画像加工"),
+                           ("LP・バナー制作のデザイナー募集（長期・週3日〜）", "バナー"),
+                           ("【長期】バナー・SNS画像制作デザイナー募集｜ECサイトの運用経験者歓迎", "バナー"),
                            # ほかの除外語にも当たれば、そちらの語で外れる
                            ("LPデザイン・バナー制作｜時給1,500円〜", "時給"),
                            ("【完全在宅】EC・広告クリエイティブ経験者歓迎✨LPデザイン・バナー制作", "広告クリエイティブ")]:
