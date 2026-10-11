@@ -178,5 +178,68 @@ def cw() -> None:
         print(f"::notice title=1万円以上・見積りの例 {name}::{fit_annotation(items, 3800)}")
 
 
+COVER_CATEGORIES = [("84", "ECサイト制作"), ("137", "ECサイトデザイン"), ("87", "モバイルサイト・スマホサイト制作"),
+                    ("82", "スマホアプリ開発・サイト構築"), ("286", "アイコン・ボタン・ヘッダー制作"), ("77", "UI/UX設計・デザイン")]
+
+
+def cover() -> None:
+    """使っていないカテゴリの新着3ページに、シートに無い・今の条件で送れる案件があるか。"""
+    from playwright.sync_api import sync_playwright
+    from src.worker_matcher import is_relevant_title, title_has_excluded
+    urls = {m.group(1) for r in fetch_rows("select G where G contains 'crowdworks'", keys=["url"])
+            if (m := re.search(r"/public/jobs/(\d+)", r["url"]))}
+    lines: list[str] = []
+    missing: list[str] = []
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+            locale="ja-JP",
+        ).new_page()
+        page.set_default_timeout(8_000)
+        for cid, name in COVER_CATEGORIES:
+            total = in_sheet = 0
+            for page_num in (1, 2, 3):
+                try:
+                    page.goto(f"https://crowdworks.jp/public/jobs/category/{cid}?order=new&hide_expired=true&page={page_num}",
+                              wait_until="domcontentloaded", timeout=30_000)
+                    page.wait_for_timeout(2_500)
+                except Exception as exc:
+                    lines.append(f"{cid} p{page_num} 失敗 {type(exc).__name__}")
+                    break
+                links = page.locator("a[href*='/public/jobs/']")
+                seen = set()
+                got = 0
+                for i in range(links.count()):
+                    href = links.nth(i).get_attribute("href") or ""
+                    m = re.search(r"/public/jobs/(\d+)", href)
+                    if not m or m.group(1) in seen:
+                        continue
+                    title = (links.nth(i).inner_text() or "").strip()
+                    if len(title) < 3:
+                        continue
+                    seen.add(m.group(1))
+                    got += 1
+                    total += 1
+                    if m.group(1) in urls:
+                        in_sheet += 1
+                        continue
+                    try:
+                        card = links.nth(i).locator("xpath=ancestor::li[1]").inner_text()
+                    except Exception:
+                        card = title
+                    bm = re.search(r"[\d,]+\s*円\s*[〜~]\s*[\d,]+\s*円|[\d,]+\s*円", card)
+                    budget = bm.group(0) if bm else ""
+                    if (is_relevant_title(title) and not title_has_excluded(title, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
+                            and band(budget) != "1万円未満"):
+                        missing.append(f"{cid}｜{title}（{budget or '見積り'}）/{m.group(1)}")
+                if got == 0:
+                    break
+            lines.append(f"{cid}:{name} {total}件のうちシートにある{in_sheet}件")
+        browser.close()
+    print(f"::notice title=使っていないカテゴリ（新着3ページ）::{' / '.join(lines)} ｜ シートのCrowdWorksの案件 {len(urls)}件")
+    print(f"::notice title=シートに無くて今の条件で送れる案件（{len(missing)}件）::{fit_annotation(missing, 3900)}")
+
+
 if __name__ == "__main__":
-    {"sheet": sheet, "cw": cw}[sys.argv[1]]()
+    {"sheet": sheet, "cw": cw, "cover": cover}[sys.argv[1]]()
