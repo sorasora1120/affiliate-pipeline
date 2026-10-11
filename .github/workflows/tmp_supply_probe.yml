@@ -1,0 +1,113 @@
+name: 一時チェック（案件を増やせる所を探す）
+
+# 2026-10-11、「もっと案件見つけて」とのことで、カテゴリ一覧の4ページ目より後ろと、まだ試していない検索語で、
+# 募集中で・関連があり・シートにまだ無い案件がどれだけ出るかを数える（10-09にも同じことをした）。確認後に消す。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - working-directory: job_scraper
+        run: pip install -r requirements.txt && playwright install chromium --with-deps
+      - name: 調べる
+        working-directory: job_scraper
+        run: |
+          python3 - <<'EOF'
+          import json, re, time, urllib.parse, urllib.request
+          from urllib.parse import quote
+          from playwright.sync_api import sync_playwright
+          import config
+          from src.worker_matcher import is_relevant_title, title_has_excluded
+
+          sheet = "1i2BtQulkchFt2dXxt9o6qLhdC7CXlBpv91EziyCp3o0"
+          q = urllib.parse.urlencode({"tqx": "out:json", "sheet": "案件一覧", "tq": "select G where G != ''"})
+          text = urllib.request.urlopen(urllib.request.Request(f"https://docs.google.com/spreadsheets/d/{sheet}/gviz/tq?{q}", headers={"User-Agent": "Mozilla/5.0"}), timeout=60).read().decode()
+          data = json.loads(text[text.index("(") + 1:text.rindex(")")])
+          known = {m.group(1) for r in data["table"]["rows"] for c in (r.get("c") or []) if c and c.get("v") and (m := re.search(r"/public/jobs/(\d+)", str(c["v"])))}
+          print("シートの案件ID", len(known))
+
+          JS = """() => {
+            const out = [], seen = new Set();
+            for (const a of document.querySelectorAll("a[href*='/public/jobs/']")) {
+              const m = (a.getAttribute("href") || "").match(/\\/public\\/jobs\\/(\\d+)/);
+              const t = (a.innerText || "").trim();
+              if (!m || seen.has(m[1]) || t.length < 3) continue;
+              seen.add(m[1]);
+              const li = a.closest("li");
+              out.push({id: m[1], title: t, sur: li ? li.innerText : t});
+            }
+            return out;
+          }"""
+          CATS_JS = """() => [...document.querySelectorAll("a[href*='/public/jobs/category/']")].map(a => {
+              const m = a.getAttribute("href").match(/category\\/(\\d+)/); return m ? m[1] + ":" + a.innerText.trim().replace(/\\s+/g, " ") : null;
+            }).filter(Boolean)"""
+          lines = []
+          with sync_playwright() as pw:
+              b = pw.chromium.launch(headless=True)
+              pg = b.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36", locale="ja-JP").new_page()
+
+              def load(url):
+                  pg.goto(url, wait_until="domcontentloaded", timeout=30000)
+                  try:
+                      pg.wait_for_selector("a[href*='/public/jobs/']", timeout=10000)
+                  except Exception:
+                      pass
+                  if "403" in (pg.title() or ""):
+                      raise SystemExit("403（このランナーはブロックされている）")
+
+              def measure(label, url, kw=None):
+                  try:
+                      load(url)
+                      jobs = pg.evaluate(JS)
+                  except SystemExit:
+                      raise
+                  except Exception as exc:
+                      lines.append(f"{label}::読めなかった {exc.__class__.__name__}")
+                      return
+                  if kw:
+                      jobs = [j for j in jobs if kw.lower() in j["title"].lower() or kw.lower() in j["sur"].lower()]
+                  rel = [j for j in jobs if is_relevant_title(j["title"]) and not title_has_excluded(j["title"], config.WORKER_MATCH_EXCLUDE_KEYWORDS)]
+                  new = [j for j in rel if j["id"] not in known]
+                  def yen(t):
+                      nums = [int(x.replace(",", "")) for x in re.findall(r"([\d,]{4,})\s*円", t)]
+                      return max(nums) if nums else None
+                  big = [j for j in new if (yen(j["sur"]) or 0) >= 10000 or yen(j["sur"]) is None]
+                  lines.append(f"{label}::募集中{len(jobs)}・関連{len(rel)}・シートに無い{len(new)}（1万円以上か見積り{len(big)}）｜" + " / ".join(j["title"][:28] + f"({yen(j['sur']) or '見積'})" for j in big[:8]))
+                  time.sleep(2)
+
+              for cid in ["14", "15", "16", "17", "20", "285", "7", "304"]:
+                  for page in (4, 6, 8):
+                      measure(f"カテゴリ{cid} {page}ページ", f"https://crowdworks.jp/public/jobs/category/{cid}?order=new&hide_expired=true&page={page}")
+              for kw in ["ウェブサイト", "Webサイト", "サイト作成", "ホームページ", "コーディング", "スマホ対応", "フォーム設置",
+                         "EC-CUBE", "カラーミー", "MakeShop", "Webflow", "WordPressカスタマイズ", "サーバー移行", "LP改善", "Figma"]:
+                  measure(f"検索 {kw}", f"https://crowdworks.jp/public/jobs/search?search%5Bkeywords%5D={quote(kw)}&order=new&hide_expired=true", kw)
+              b.close()
+          with open("probe.txt", "w") as f:
+              f.write("\n".join(lines) + "\n")
+          EOF
+      - name: 結果1
+        working-directory: job_scraper
+        run: sed -n '1,9p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果2
+        working-directory: job_scraper
+        run: sed -n '10,18p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果3
+        working-directory: job_scraper
+        run: sed -n '19,27p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果4
+        working-directory: job_scraper
+        run: sed -n '28,36p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果5
+        working-directory: job_scraper
+        run: sed -n '37,45p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
+      - name: 結果6
+        working-directory: job_scraper
+        run: sed -n '46,60p' probe.txt | while IFS= read -r line; do echo "::notice title=${line%%::*}::${line#*::}"; done
