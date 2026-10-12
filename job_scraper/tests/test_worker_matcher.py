@@ -468,41 +468,20 @@ class DesignJobTest(unittest.TestCase):
         self.assertIn(PORTFOLIO_BASE_URL + "\n", proposal)
         self.assertIn("海外向けサイト", proposal)
 
-    def test_illustration_jobs_pass_and_mass_recruitment_does_not(self):
-        # 2026-10-12夜、ユーザー「もっと仕事のはばふやして」。イラストと、取扱説明書・封筒・年賀状・のぼりなどの印刷物も拾う
+    def test_print_jobs_pass_and_illustration_does_not(self):
+        # 2026-10-12夜、ユーザー「もっと仕事のはばふやして」で取扱説明書・封筒・年賀状・のぼりなどの印刷物も拾う。
+        # イラストは一度足したが「イラストは無理かも」で外した（除外語「イラスト」のまま）
         import config
         from src.worker_matcher import job_passes, job_type
         kws = config.WORKER_MATCH_EXCLUDE_KEYWORDS
-        for title, kind in [("歌ってみたで使用するイラスト作成依頼", "illust"),
-                            ("自動車イラスト描き起こし（長辺140mm；CMYK、1点）", "illust"),
-                            ("【急募】法人向けマニュアル動画に使用するイラストを作成してほしい", "illust"),
-                            ("【VTuber／Live2D】男性キャラクターの新モデル用イラスト・パーツ分けPSD制作依頼", "illust"),
-                            ("会社のマスコットキャラクターのデザイン", "illust"),
-                            ("【取扱説明書デザイン制作】携帯エアークッション ×2種類分（各4ページ）", "flyer"),
-                            ("イベント用のぼり旗のデザイン制作", "flyer"),
-                            ("年賀状のデザインをお願いします", "flyer"),
-                            ("イラスト入りのチラシ作成", "flyer"),
-                            ("ロゴとイラストの作成", "logo")]:
+        for title in ["【取扱説明書デザイン制作】携帯エアークッション ×2種類分（各4ページ）", "イベント用のぼり旗のデザイン制作",
+                      "年賀状のデザインをお願いします", "封筒デザインの作成", "展示会用タペストリーのデザイン"]:
             self.assertTrue(job_passes(title, kws), title)
-            self.assertEqual(job_type(title), kind, title)
-        for title in ["【手描き作業】下絵のトレース＆描き込み（鉛筆・色鉛筆・水彩など）◆郵送料・画材支給あり",
-                      "【未経験OK】Instagram投稿のイラスト制作スタッフ募集",
-                      "FANZA用AIイラスト生成をしてくれる方募集！",
-                      "【継続】ゲームのキャラクターイラスト制作メンバー募集",
-                      "漫画のイラスト作成", "1枚3,000円でイラスト作成",
-                      "ショート動画の編集ができる方を募集しています"]:
+            self.assertEqual(job_type(title), "flyer", title)
+        for title in ["歌ってみたで使用するイラスト作成依頼", "自動車イラスト描き起こし（長辺140mm；CMYK、1点）",
+                      "【急募】法人向けマニュアル動画に使用するイラストを作成してほしい", "ポスター・年賀状のイラスト作成ができるイラストレーターさん募集",
+                      "Webゲームコンテンツのキャラクターイラスト6人分制作", "かわいい手書きの説明イラストの作成（ラフあり、継続あり）"]:
             self.assertFalse(job_passes(title, kws), title)
-
-    def test_illustration_proposal_promises_examples_from_the_illustrator(self):
-        from src.worker_matcher import DESIGN_SAMPLES_URL, estimate_amount, proposal_and_worker_message
-        c = {"title": "歌ってみたで使用するイラスト作成依頼", "url": "https://crowdworks.jp/public/jobs/1",
-             "description": "", "amount": None, "amount_estimate": 20000, "fee": 4000, "margin": 4000, "quote": 12000}
-        proposal, _ = proposal_and_worker_message(c)
-        self.assertIn(DESIGN_SAMPLES_URL, proposal)
-        self.assertIn("担当するイラストレーターのもの", proposal)
-        self.assertIn("作品例をお送りします", proposal)
-        self.assertNotIn("上のページで雰囲気が合いそうでしたら", proposal)
-        self.assertEqual(estimate_amount(c["title"], 0), 20000)
 
     def test_nightlife_jobs_are_excluded(self):
         # 2026-10-12夜、ユーザー「はい」（夜のお店の仕事は外す）。ハンドソープの容器やバーのサイトは外さない
