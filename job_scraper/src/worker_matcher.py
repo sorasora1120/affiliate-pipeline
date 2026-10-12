@@ -129,6 +129,10 @@ _DESIGN_BLOCK_RE = re.compile(
     r"配布|ポスティング|手配り|入力|貼り|発送|封入|施工|設置|取り付け|取付|"
     r"アプリ|管理システム|システムの?開発|翻訳|文字起こし|生成ai|ai画像|画像生成"
 )
+# バナーだけの依頼は、テーマを変えて何件も出す大量募集が多い（2026-10-12、初回の収集で「〜を紹介するバナー制作してくださる
+# 方募集✨継続依頼あり」「旅好きな方へ｜宿特集のバナー制作」「〜の魅力を届ける｜バナー作成」などが9件通った）。
+# 絵文字・テーマ紹介・継続・人集めの言い方があれば外す（LPと一緒の依頼は除く）
+_BANNER_BLOCK_RE = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]|紹介する|特集|魅力|彩る|方へ|継続|簡単な|好きな方|くださる方")
 # デザインの仕事では外さない除外語（サイト制作の判定では、今までどおり外す）
 DESIGN_EXCLUDE_EXEMPT = ("ポスター", "チラシ", "名刺", "バナー", "パンフレット", "冊子", "ショップカード", "ロゴ",
                          "販促物", "営業", "広告クリエイティブ")
@@ -147,7 +151,11 @@ def design_kind(title: str) -> str:
 
 def is_design_job(title: str, excluded_keywords: list[str]) -> bool:
     """送れる案件にするデザインの仕事か（大量募集・スタッフ集め・ほかの除外語に当たるものは外す）。"""
-    if not design_kind(title) or _DESIGN_BLOCK_RE.search(_normalize(title)):
+    t = _normalize(title)
+    kind = design_kind(title)
+    if not kind or _DESIGN_BLOCK_RE.search(t):
+        return False
+    if kind == "banner" and _BANNER_BLOCK_RE.search(t) and not re.search(r"(?<![a-z])lp(?![a-z])|ランディング", t):
         return False
     return not excluded_hit(title, [kw for kw in excluded_keywords if kw not in DESIGN_EXCLUDE_EXEMPT])
 

@@ -518,17 +518,34 @@ function isExcluded(title, keywords = WORKER_MATCH_EXCLUDE_KEYWORDS) {
 // デザインの仕事（チラシ・名刺・ロゴ・バナー・パッケージ）も拾う（2026-10-12、ユーザー「じゃあ仕事増やそう」。
 // affiliate-pipeline の worker_matcher.py の design_kind / is_design_job と同じ。Instagram投稿・未経験歓迎などの
 // 大量募集や、配る・貼る・入力などの作業は外す。サイト制作の判定（isExcluded）は今までどおり）
-const DESIGN_KIND_RE = /ロゴ(?!入)|名刺|ショップカード|スタンプカード|ポイントカード|パッケージ|ラベル|容器|化粧箱|チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|看板(?!商品|娘)|(^|[^a-z])(?:pop|dm)(?![a-z])|バナー|ヘッダー画像/;
-const DESIGN_STRONG_RE = /チラシ|フライヤー|名刺|ロゴ(?!入)|パンフレット|リーフレット|ポスター|ショップカード|バナー/;
+// [種類, その種類の言葉, それだけでデザインの依頼だと分かる言葉（無い種類は、作業の言葉があるときだけ）]
+const DESIGN_KINDS = [
+  ["logo", /ロゴ(?!入)/, /ロゴ(?!入)/],
+  ["card", /名刺|ショップカード|スタンプカード|ポイントカード/, /名刺|ショップカード/],
+  ["package", /パッケージ|ラベル|容器|化粧箱/, null],
+  ["flyer", /チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|看板(?!商品|娘)|(^|[^a-z])(?:pop|dm)(?![a-z])/, /チラシ|フライヤー|パンフレット|リーフレット|ポスター/],
+  ["banner", /バナー|ヘッダー画像/, /バナー/],
+];
 const DESIGN_WORK_RE = /デザイン|制作|作成|作って|作り|一新|リニューアル|ブラッシュアップ/;
 const DESIGN_BLOCK_RE = /instagram|インスタ|sns|投稿|フィード|ストーリー|リール|threads|tiktok|youtube|サムネ|未経験|初心者|[2-5]0代|(?:主婦|学生|ママ)(?:さん)?(?:歓迎|の方)|スタッフ|副業|在宅ワーク|完全在宅|デザイナー(?:さん)?を?募集|クリエイター(?:さん)?を?募集|メンバー|長期|月額|常駐|出社|週\d|1\s*(?:枚|本|投稿|点)(?:あたり)?\s*[\d,]+\s*円|配布|ポスティング|手配り|入力|貼り|発送|封入|施工|設置|取り付け|取付|アプリ|管理システム|システムの?開発|翻訳|文字起こし|生成ai|ai画像|画像生成/;
+// バナーだけの依頼は、テーマを変えて何件も出す大量募集が多いので、絵文字・テーマ紹介・継続・人集めの言い方があれば外す（LPと一緒の依頼は除く）
+const BANNER_BLOCK_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]|紹介する|特集|魅力|彩る|方へ|継続|簡単な|好きな方|くださる方/u;
 const DESIGN_EXCLUDE_EXEMPT = ["ポスター", "チラシ", "名刺", "バナー", "パンフレット", "冊子", "ショップカード", "ロゴ", "販促物", "営業", "広告クリエイティブ"];
+
+function designKind(low) {
+  const hasWork = DESIGN_WORK_RE.test(low);
+  for (const [kind, words, strong] of DESIGN_KINDS) {
+    if (hasWork ? words.test(low) : (strong && strong.test(low))) return kind;
+  }
+  return "";
+}
 
 function isDesignJob(title) {
   const t = String(title || "");
   const low = t.normalize("NFKC").toLowerCase();
-  if (!(DESIGN_STRONG_RE.test(low) || (DESIGN_KIND_RE.test(low) && DESIGN_WORK_RE.test(low)))) return false;
-  if (DESIGN_BLOCK_RE.test(low)) return false;
+  const kind = designKind(low);
+  if (!kind || DESIGN_BLOCK_RE.test(low)) return false;
+  if (kind === "banner" && BANNER_BLOCK_RE.test(low) && !/(^|[^a-z])lp(?![a-z])|ランディング/.test(low)) return false;
   return !isExcluded(t, WORKER_MATCH_EXCLUDE_KEYWORDS.filter(k => !DESIGN_EXCLUDE_EXEMPT.includes(k)));
 }
 
