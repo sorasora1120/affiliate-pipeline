@@ -103,6 +103,61 @@ def has_weak_web_word(title: str) -> bool:
     return _has_weak_word(_normalize(title))
 
 
+# サイト制作のほかに拾うデザインの仕事（2026-10-12、ユーザー「じゃあ仕事増やそう」）。ワーカーには Fiverr で
+# 仕事が決まってから頼むので、1人のワーカーができることに絞らなくてよくなった。クラウドワークスで1万円以上か
+# 見積りの、チラシ・名刺・パッケージ（カテゴリ「印刷物・DTPデザイン」）が1日約4件、ロゴ・バナーの普通の依頼が
+# 1日数件ある（10-12に数えた）。同じカテゴリの大半を占める「Instagram投稿デザイン｜未経験歓迎・20代歓迎・
+# Canvaテンプレあり」のような大量募集（1投稿いくらの継続の仕事）や、作業スタッフ集めは外す。
+# 種類は上から順に最初に当たったもの（「ロゴと名刺」はロゴ）
+_DESIGN_KINDS: list[tuple[str, re.Pattern]] = [
+    ("logo", re.compile(r"ロゴ(?!入)")),
+    ("card", re.compile(r"名刺|ショップカード|スタンプカード|ポイントカード")),
+    ("package", re.compile(r"パッケージ|ラベル|容器|化粧箱")),
+    ("flyer", re.compile(r"チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|"
+                         r"看板(?!商品|娘)|(?<![a-z])(?:pop|dm)(?![a-z])")),
+    ("banner", re.compile(r"バナー|ヘッダー画像")),
+]
+# それだけでデザインの依頼だと分かる言葉。ほかの言葉（パッケージ・看板など）は、作業の言葉があるときだけ
+_DESIGN_STRONG_RE = re.compile(r"チラシ|フライヤー|名刺|ロゴ(?!入)|パンフレット|リーフレット|ポスター|ショップカード|バナー")
+_DESIGN_WORK_RE = re.compile(r"デザイン|制作|作成|作って|作り|一新|リニューアル|ブラッシュアップ")
+# 大量募集・作業スタッフ集め・デザインではない作業（配る・貼る・入力・施工・アプリなど）
+_DESIGN_BLOCK_RE = re.compile(
+    r"instagram|インスタ|sns|投稿|フィード|ストーリー|リール|threads|tiktok|youtube|サムネ|"
+    r"未経験|初心者|[2-5]0代|(?:主婦|学生|ママ)(?:さん)?(?:歓迎|の方)|スタッフ|副業|在宅ワーク|完全在宅|"
+    r"デザイナー(?:さん)?を?募集|クリエイター(?:さん)?を?募集|メンバー|長期|月額|常駐|出社|週\d|"
+    r"1\s*(?:枚|本|投稿|点)(?:あたり)?\s*[\d,]+\s*円|"
+    r"配布|ポスティング|手配り|入力|貼り|発送|封入|施工|設置|取り付け|取付|"
+    r"アプリ|管理システム|システムの?開発|翻訳|文字起こし|生成ai|ai画像|画像生成"
+)
+# デザインの仕事では外さない除外語（サイト制作の判定では、今までどおり外す）
+DESIGN_EXCLUDE_EXEMPT = ("ポスター", "チラシ", "名刺", "バナー", "パンフレット", "冊子", "ショップカード", "ロゴ",
+                         "販促物", "営業", "広告クリエイティブ")
+
+
+def design_kind(title: str) -> str:
+    """デザインの依頼なら種類（logo / card / package / flyer / banner）、違えば空文字。"""
+    t = _normalize(title)
+    has_work = bool(_DESIGN_WORK_RE.search(t))
+    for kind, pattern in _DESIGN_KINDS:
+        for m in pattern.finditer(t):
+            if has_work or _DESIGN_STRONG_RE.fullmatch(m.group(0)):
+                return kind
+    return ""
+
+
+def is_design_job(title: str, excluded_keywords: list[str]) -> bool:
+    """送れる案件にするデザインの仕事か（大量募集・スタッフ集め・ほかの除外語に当たるものは外す）。"""
+    if not design_kind(title) or _DESIGN_BLOCK_RE.search(_normalize(title)):
+        return False
+    return not excluded_hit(title, [kw for kw in excluded_keywords if kw not in DESIGN_EXCLUDE_EXEMPT])
+
+
+def job_passes(title: str, excluded_keywords: list[str]) -> bool:
+    """送れる案件にする題名か：サイト制作の仕事（今までの判定）か、デザインの仕事。"""
+    return (is_relevant_title(title) and not title_has_excluded(title, excluded_keywords)) or is_design_job(
+        title, excluded_keywords)
+
+
 # 予算未提示の案件の目安額（クライアントに提示する総額の想定）。一律の額だと
 # 全カードが同じ数字になり目安として役に立たないため、タイトルから案件の種類を
 # 推定して変える。上から順に最初に一致したものを使う。金額はクラウドソーシング
@@ -115,7 +170,14 @@ _ESTIMATE_RULES: list[tuple[list[str], int]] = [
 ]
 
 
+# デザインの仕事の目安額（2026-10-12、クラウドワークスで同じ種類の依頼に多い金額の下の方）
+_DESIGN_ESTIMATES = {"logo": 30000, "package": 40000, "flyer": 20000, "card": 10000, "banner": 10000}
+
+
 def estimate_amount(title: str, fallback_yen: int) -> int:
+    kind = job_type(title)
+    if kind in _DESIGN_ESTIMATES:
+        return max(_DESIGN_ESTIMATES[kind], fallback_yen)
     t = _normalize(title)
     for words, amount in _ESTIMATE_RULES:
         for w in words:
@@ -253,6 +315,37 @@ _TYPE_TEXT: dict[str, dict] = {
         "samples": ["accounting"],
         "team": ["skyfox", "gipsyqueens"],
     },
+    # デザインの仕事（2026-10-12）。plan は使っていないが、ほかの型と形をそろえる
+    "logo": {
+        "plan": "ご要望の確認 → 方向性の違う案 → 1案にしぼって仕上げ → 使う場所に合わせたパターン → データ一式で納品",
+        "point": "ロゴは長く使うものなので、名刺の小さな文字の横でも看板でも見やすい形に仕上げます。",
+        "questions": ["お名前（会社名・店名）の表記（日本語・英字）と、好きな雰囲気や使いたい色", "ロゴを主に使う場所（看板・名刺・Web・SNSなど）"],
+        "samples": [], "team": [],
+    },
+    "card": {
+        "plan": "載せる内容の確認 → デザイン → ご確認・修正 → 入稿データで納品",
+        "point": "名刺は、渡したあとに見返したとき、誰で何をしている人かがすぐ分かる形にします。",
+        "questions": ["入れたい情報（お名前・肩書き・連絡先など）と、片面か両面か", "ロゴのデータがあるかどうか"],
+        "samples": [], "team": [],
+    },
+    "package": {
+        "plan": "商品と型（展開図）の確認 → デザイン → ご確認・修正 → 入稿データで納品",
+        "point": "売り場や画面の中で、まず手に取ってもらえるパッケージにします。",
+        "questions": ["商品の大きさや形（展開図があれば）と、入れる必要がある表示（原材料など）", "参考にしたいパッケージがあれば"],
+        "samples": [], "team": [],
+    },
+    "flyer": {
+        "plan": "載せる内容の確認 → レイアウト → デザイン → ご確認・修正 → 入稿データで納品",
+        "point": "手に取って3秒で、何の話でどうすればいいかが伝わる形にします。",
+        "questions": ["サイズ（A4・B5など）と片面か両面か、入れたい文章や写真", "配る場所や、見てほしい人"],
+        "samples": [], "team": [],
+    },
+    "banner": {
+        "plan": "サイズと文言の確認 → デザイン → ご確認・修正 → 納品",
+        "point": "スクロール中の一瞬で目に留まり、押した先とズレないバナーにします。",
+        "questions": ["サイズ（px）と枚数、入れたい文言", "載せる場所（自社サイト・広告など）"],
+        "samples": [], "team": [],
+    },
     "coding": {
         "plan": "デザインの確認 → HTML・CSSでコーディング → PC・スマホ・主なブラウザで表示確認 → 納品",
         "point": "いただいたデザインを、PCでもスマホでもずれなく再現し、あとから直しやすいコードでお渡しします。",
@@ -275,7 +368,7 @@ _CODING_RE = re.compile(r"コーディング|(?<![a-z])(?:html|css|javascript|js
 # 「LP制作（ファーストビューのデザインから）」のように、LPやサイトを作る中の一部なら今までどおり
 _VISUAL_RE = re.compile(r"(?:メインビジュアル|キービジュアル|(?<![a-z])kv(?![a-z])|ファーストビュー|ヘッダー画像|トップ画像|ヒーロー画像)"
                         r"\s*の?\s*(?:画像)?\s*の?\s*(?:制作|作成|デザイン)")
-_WHOLE_BUILD_RE = re.compile(r"(?:lp|サイト|ホームページ|hp|ページ)\s*の?\s*(?:制作|作成|構築|デザイン)")
+_WHOLE_BUILD_RE = re.compile(r"(?:lp|サイト|ホームページ|hp|ページ)\s*の?\s*(?:制作|作成|構築|デザイン|リデザイン|リニューアル)")
 # 「（LP/HP）」はどちらでもよいという意味なので、LPの型に決めない（2026-10-12、「夜カフェ＆バー｜公式Webサイト
 # （LP/HP）デザイン制作」がLPの型になり、お店の予約や雰囲気ではなく申し込みボタンやフォームの話になっていた）
 _LP_OR_HP_RE = re.compile(r"lp\s*[/・or]+\s*hp|hp\s*[/・or]+\s*lp")
@@ -285,6 +378,12 @@ def job_type(title: str) -> str:
     t = _normalize(title)
     if _VISUAL_RE.search(t) and not _WHOLE_BUILD_RE.search(t):
         return "visual"
+    # デザインの仕事（2026-10-12）。「LPデザイン＆広告バナー制作」「コーポレートサイト制作とロゴ作成」のように
+    # LPやサイトそのものを作る依頼なら、今までどおりサイトの型
+    kind = design_kind(title)
+    if kind and not (_WHOLE_BUILD_RE.search(t) or _CLEAR_WORK_RE.search(t)
+                     or re.search(r"(?<![a-z])lp(?![a-z])|ランディング", t)):
+        return kind
     t = _LP_OR_HP_RE.sub("hp", t)
     if not _BUILD_RE.search(t):
         if _FIX_RE.search(t):
@@ -418,6 +517,31 @@ _PITCH: dict[str, dict] = {
         "ideas": ["何をしている所かが、ひと目で分かる言葉と写真の組み合わせ", "スマホの縦長の画面でも、文字が切れずに読める配置",
                   "サイトの色や文字に合わせて、浮かない仕上がり"],
     },
+    "logo": {
+        "hook": "ロゴは、小さくしても白黒にしても、その会社やお店らしさが伝わることが一番大事だ",
+        "ideas": ["名刺の小さな文字の横でも、看板の大きさでも見やすい形", "カラー・白黒・横長・正方形など、使う場所に合わせたパターン",
+                  "AI・PNG・SVGのデータを一式でお渡し"],
+    },
+    "card": {
+        "hook": "名刺は、あとで見返したときに「誰で・何をしている人か」がすぐ分かることが一番大事だ",
+        "ideas": ["お名前とお仕事の内容が、ひと目で分かる配置", "会社やお店の雰囲気に合う色と書体",
+                  "印刷会社にそのまま出せる入稿データ（PDF・AI）でお渡し"],
+    },
+    "package": {
+        "hook": "パッケージは、売り場や画面の中で、まず手に取ってもらえるかが一番大事だ",
+        "ideas": ["離れて見ても、何の商品かが分かる大きさと配置", "ブランドの色と雰囲気をそろえて、並べたときに目立つ形",
+                  "印刷会社の型（展開図）に合わせた入稿データでお渡し"],
+    },
+    "flyer": {
+        "hook": "チラシやパンフレットは、手に取って3秒で「何の話で、どうすればいいか」が伝わることが一番大事だ",
+        "ideas": ["一番伝えたいこと（特典・日付・場所など）を大きく、ひと目で", "文字と写真の量をしぼって、読みやすく",
+                  "印刷会社にそのまま出せる入稿データ（PDF・AI）でお渡し"],
+    },
+    "banner": {
+        "hook": "バナーは、スクロールしている一瞬で「自分に関係ある」と思ってもらえるかが一番大事だ",
+        "ideas": ["伝えたい言葉を1つにしぼって、大きく", "スマホの小さな画面でも読める文字の大きさ",
+                  "サイトや広告の色と合わせて、押した先とズレない形"],
+    },
     "coding": {
         "hook": "コーディングは、デザインの細かい余白や文字の大きさまで、そのまま再現できるかが一番大事だ",
         "ideas": ["デザインの通りに、PC・スマホの両方でずれなく組む", "Chrome・Safari など主なブラウザで表示を確かめてからお渡し",
@@ -425,7 +549,10 @@ _PITCH: dict[str, dict] = {
     },
 }
 # 作業だけの依頼では、募集文に合わせた入れ替え（インスタ連携・SEO・雰囲気づくりなど、新しく作る時の話）をしない
-_WORK_ONLY_TYPES = ("fix", "coding", "visual")
+_WORK_ONLY_TYPES = ("fix", "coding", "visual", "logo", "card", "package", "flyer", "banner")
+DESIGN_TYPES = ("logo", "card", "package", "flyer", "banner")
+# デザインの仕事の提案文で見てもらうページ（架空のお店のチラシ・名刺・ロゴ・バナー・パッケージ。sorasora1120.github.io）
+DESIGN_SAMPLES_URL = PORTFOLIO_BASE_URL + "design.html"
 # 募集文に出てくる言葉 → その案件に合わせた一行（業種の型より優先して、最大2つ入れ替える）
 _IDEA_EXTRAS: list[tuple[list[str], str]] = [
     (["instagram", "インスタ"], "インスタの最新投稿をサイトに自動で表示"),
@@ -505,6 +632,9 @@ def _rough_line(title: str) -> str:
     t = _normalize(title)
     if job_type(title) == "visual":
         return "ご契約前に、構図のラフをお見せできます。"
+    if job_type(title) in DESIGN_TYPES:
+        # 契約前にデザインそのもの（ラフ）は作らない（ワーカーには仕事が決まってから頼むため）
+        return "ご契約前に、作業の流れと、お渡しするデータの一覧をお送りします。"
     if re.search(r"ファーストビュー|メインビジュアル|(?<![a-z])(?:fv|mv)(?![a-z])", t):
         return "ご契約前に、ファーストビューのラフをお見せできます。"
     if job_type(title) in _WORK_ONLY_TYPES or (re.search(r"設定|フォーム", t) and not _BUILD_RE.search(t)):
@@ -517,11 +647,25 @@ def _rough_line(title: str) -> str:
 def _tailored_parts(title: str, description: str = "") -> dict:
     key = job_type(title)
     spec = _TYPE_TEXT[key]
+    ideas = pick_ideas(key, description)
+    t = _normalize(title)
+    # ロゴとサイトの両方を頼みたい依頼（2026-10-12）。もう片方にも一言ふれる
+    if key == "logo" and re.search(r"ホームページ|サイト|(?<![a-z])hp(?![a-z])", t):
+        ideas = ideas[:2] + ["ホームページも、ロゴと同じ雰囲気でそろえてお作りできます"]
+    elif key not in DESIGN_TYPES and "ロゴ" in t:
+        ideas = ideas[:2] + ["ロゴも、サイトと同じ雰囲気でそろえてお作りします"]
+    if key in DESIGN_TYPES:
+        look, portfolio = "まずはデザインのサンプルをご覧ください。", DESIGN_SAMPLES_URL
+        note = "チラシ・名刺・ロゴ・バナー・パッケージのサンプルを1ページにまとめています（1分で見られます）。"
+    else:
+        look, portfolio = "まずは制作実績をご覧ください。", PORTFOLIO_BASE_URL
+        note = f"チームで制作した海外向けサイト{len(TEAM_WORKS)}件と、業種別のデザインサンプルを1ページにまとめています（1分で見られます）。"
     return {
         "hook": _PITCH[key]["hook"],
-        "ideas": "\n".join(f"・{t}" for t in pick_ideas(key, description)) + _custom_line(description),
-        "portfolio": PORTFOLIO_BASE_URL,
-        "team_count": len(TEAM_WORKS),
+        "ideas": "\n".join(f"・{i}" for i in ideas) + _custom_line(description),
+        "look": look,
+        "portfolio": portfolio,
+        "portfolio_note": note,
         "question": spec["questions"][0],
         "rough": _rough_line(title),
     }
@@ -530,9 +674,10 @@ def _tailored_parts(title: str, description: str = "") -> dict:
 # 2026-10-08、「文章が長くて読みにくい」「一番大事なポートフォリオへの誘導ができていない」とのことで作り直した。
 # 依頼者の応募一覧で最初に見える2〜3行の中にポートフォリオのURLを入れ、全体も約3分の1の長さにした。
 # 1行目の【案件名】はやめた（応募一覧では案件に紐づいて表示されるので、最初の行をURLの案内に使う）。
-_INTRO = """はじめまして、ソラと申します。まずは制作実績をご覧ください。
+# 2026-10-12、デザインの仕事（チラシ・名刺・ロゴなど）はデザインのサンプルのページを案内する（_tailored_parts）
+_INTRO = """はじめまして、ソラと申します。{look}
 ▶ {portfolio}
-チームで制作した海外向けサイト{team_count}件と、業種別のデザインサンプルを1ページにまとめています（1分で見られます）。
+{portfolio_note}
 
 募集を拝見して、{hook}と思いました。今回はこの3つを大事にします。
 {ideas}
@@ -647,13 +792,12 @@ def find_candidates(
             # 「ライバー向けのウェブメディア」が「ライバー」に当たって外れていたため）。
             # 今の決まりでもまだ外れるものは、ステータスを書き直さずにそのままにする
             title = r.get("タイトル", "")
-            if ((r.get("検出日") or "") < recheck_since or title_has_excluded(title, excluded_keywords)
-                    or not is_relevant_title(title)):
+            if (r.get("検出日") or "") < recheck_since or not job_passes(title, excluded_keywords):
                 continue
         elif status != "未チェック":
             continue
         title = r.get("タイトル", "")
-        if title_has_excluded(title, excluded_keywords) or not is_relevant_title(title):
+        if not job_passes(title, excluded_keywords):
             excluded_keyword_rows.append(idx)
             continue
 
@@ -732,7 +876,7 @@ def review_proposed_rows(
         if r.get("ステータス") != PROPOSED_STATUS or r.get("進捗ステージ"):
             continue
         title = r.get("タイトル", "")
-        if title_has_excluded(title, excluded_keywords) or not is_relevant_title(title):
+        if not job_passes(title, excluded_keywords):
             irrelevant_rows.append(idx)
             continue
         # 提案で出す金額は範囲の真ん中で、題名の金額は超えない（find_candidates と同じ考え方）

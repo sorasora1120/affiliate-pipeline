@@ -399,3 +399,83 @@ class JobCategoriesConfigTest(unittest.TestCase):
             self.assertIn(label, config.WORKER_MATCH_CATEGORIES, label)
             self.assertTrue(cid.isdigit(), cid)
 
+
+
+class DesignJobTest(unittest.TestCase):
+    """2026-10-12、ユーザー「じゃあ仕事増やそう」。ワーカーにはFiverrで仕事が決まってから頼むので、
+    チラシ・名刺・ロゴ・バナー・パッケージのデザインも拾う。大量募集・作業スタッフ集めは外す。"""
+
+    def test_real_design_jobs_pass(self):
+        import config
+        from src.worker_matcher import job_passes, job_type
+        kws = config.WORKER_MATCH_EXCLUDE_KEYWORDS
+        for title, kind in [("【B5両面】年末のハウスクリーニングチラシのデザイン・構成作成依頼（集客・集客導線重視）", "flyer"),
+                            ("リフォーム塗装チラシ", "flyer"),
+                            ("弊社のパンフレットを一新", "flyer"),
+                            ("お店の前に掲げる、大看板の表と裏のデザインを募集します。", "flyer"),
+                            ("名刺デザインをお願い致します", "card"),
+                            ("新規法人のロゴ作成、名刺デザイン作成をお願い致します。", "logo"),
+                            ("システム構築会社のロゴデザイン制作を担う方を募集します", "logo"),
+                            ("布団収納袋パッケージデザイン制作", "package"),
+                            ("「ザクうま！柿の種食べるラー油」のラベルシールデザインを募集します！", "package"),
+                            ("バナーの制作", "banner"),
+                            ("ECサイトのバナー制作", "banner")]:
+            self.assertTrue(job_passes(title, kws), title)
+            self.assertEqual(job_type(title), kind, title)
+
+    def test_mass_recruitment_and_non_design_work_are_left_out(self):
+        import config
+        from src.worker_matcher import job_passes
+        kws = config.WORKER_MATCH_EXCLUDE_KEYWORDS
+        for title in ["【未経験歓迎】疲れた日でもできる簡単スキンケアを紹介するInstagram女子向けバナー制作💄✨",
+                      "【初心者歓迎】ペットショップのSNSバナー制作のお仕事！",
+                      "賃貸マンションのバナーデザイン作成🌼20代の一人暮らしの方におすすめなお部屋を発信しませんか？🏠",
+                      "バナーデザイン作成のお仕事！国内のおすすめ宿泊施設をPR！副業の方からでも応募できます！",
+                      "【長期】バナー・SNS画像制作デザイナー募集｜ECサイトの運用経験者歓迎",
+                      "【1枚3,000円〜】秋のカフェ特集をテーマにしたWebバナー制作",
+                      "チラシのポスティング（1,000枚）",
+                      "名刺管理システムの開発",
+                      "【長期募集】楽天・Amazon・Yahoo向けECデザイナー（バナー・LP制作）募集！",
+                      # サイト制作の判定は今までどおり（「LP・バナー制作」のデザイナー募集は外れたまま）
+                      "LP・バナー制作のデザイナー募集（長期・週3日〜）"]:
+            self.assertFalse(job_passes(title, kws), title)
+
+    def test_site_jobs_with_design_words_keep_the_site_type(self):
+        from src.worker_matcher import job_type
+        self.assertEqual(job_type("コーポレートサイト制作とロゴ作成"), "corporate")
+        self.assertEqual(job_type("美容クリニックのLP・バナー制作"), "lp")
+        self.assertEqual(job_type("【セルフネイルブランド✨】LPデザイン＆広告バナー制作のお仕事"), "lp")
+        self.assertEqual(job_type("会社案内パンフレットとホームページ制作"), "corporate")
+
+    def test_design_proposal_points_to_the_design_samples(self):
+        from src.worker_matcher import DESIGN_SAMPLES_URL, PORTFOLIO_BASE_URL, proposal_and_worker_message
+        c = {"title": "【B5両面】年末のハウスクリーニングチラシのデザイン・構成作成依頼", "url": "https://crowdworks.jp/public/jobs/1",
+             "description": "", "amount": 55000, "fee": 11000, "margin": 11000, "quote": 33000}
+        proposal, _ = proposal_and_worker_message(c)
+        self.assertIn(DESIGN_SAMPLES_URL, proposal)
+        self.assertIn("入稿データ", proposal)
+        self.assertNotIn("構成図", proposal)
+        self.assertNotIn("海外向けサイト", proposal)
+        c["title"] = "コーポレートサイト制作"
+        proposal, _ = proposal_and_worker_message(c)
+        self.assertIn(PORTFOLIO_BASE_URL + "\n", proposal)
+        self.assertIn("海外向けサイト", proposal)
+
+    def test_logo_and_homepage_mentions_both(self):
+        from src.worker_matcher import proposal_and_worker_message
+        c = {"title": "新規オープンする洋服お直し屋のロゴとホームページをお願いしたいです", "url": "https://crowdworks.jp/public/jobs/1",
+             "description": "", "amount": None, "amount_estimate": 30000, "fee": 6000, "margin": 6000, "quote": 18000}
+        proposal, _ = proposal_and_worker_message(c)
+        self.assertIn("ロゴは", proposal)
+        self.assertIn("ホームページも", proposal)
+
+    def test_design_rows_from_the_new_categories_become_candidates(self):
+        import config
+        rows = [_row(カテゴリ="チラシ・印刷物", タイトル="新規オープン店舗の販促チラシ作成", 予算="10,000円 〜 30,000円"),
+                _row(カテゴリ="ロゴ・バナー", タイトル="【未経験歓迎】Instagram投稿のバナー制作", 予算="10,000円 〜 30,000円"),
+                _row(カテゴリ="ロゴ・バナー", タイトル="美容系企業のロゴ作成依頼", 予算="見積り希望")]
+        cands, below, excluded = find_candidates(rows, {"チラシ・印刷物", "ロゴ・バナー"}, config.WORKER_MATCH_EXCLUDE_KEYWORDS,
+                                                 10000, 20, 3000, 30000)
+        self.assertEqual([c["row"] for c in cands], [2, 4])
+        self.assertEqual(excluded, [3])
+        self.assertEqual(cands[1]["amount_estimate"], 30000)  # ロゴの目安

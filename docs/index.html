@@ -446,9 +446,9 @@ const WORKER_MATCH_CATEGORIES = new Set([
   "ECサイト","ECサイト制作","ECサイト構築","HTMLコーディング","LPコーディング","LPデザイン","LP作成","LP修正","LP制作",
   "STUDIO","STUDIO制作","Shopify","Shopifyカスタマイズ","Webデザイン","Web制作","Wix制作","WordPress修正",
   "WordPress制作","WordPress構築","オウンドメディア構築","コーポレートサイト作成","コーポレートサイト制作","サイトデザイン",
-  "サイトリニューアル","サイト修正","サイト制作","サイト構築","トップページ","ネットショップ","ネットショップ制作","ネットショップ構築",
-  "ネットショップ開設","ペライチ制作","ホームページリニューアル","ホームページ作成","ホームページ修正","ホームページ制作","ホームページ改修",
-  "ホームページ更新","ランディングページ作成","ランディングページ制作","レスポンシブ対応","採用サイト制作",
+  "サイトリニューアル","サイト修正","サイト制作","サイト構築","チラシ・印刷物","トップページ","ネットショップ","ネットショップ制作",
+  "ネットショップ構築","ネットショップ開設","ペライチ制作","ホームページリニューアル","ホームページ作成","ホームページ修正","ホームページ制作",
+  "ホームページ改修","ホームページ更新","ランディングページ作成","ランディングページ制作","レスポンシブ対応","ロゴ・バナー","採用サイト制作",
 ]);
 const WORKER_MATCH_EXCLUDE_KEYWORDS = [
   "BASE","楽天市場","楽天","保守","運用サポート","運営サポート","営業","ポスター","チラシ","名刺","バナー","パンフレット","冊子",
@@ -499,11 +499,11 @@ function loadGvizJsonp() {
 // 「LPデザイン＆広告バナー制作」を落としていた。ほかの除外語にも当たる題名は外す）
 const SOFT_EXCLUDE_KEYWORDS = ["バナー", "画像加工", "記事LP"];
 
-function isExcluded(title) {
+function isExcluded(title, keywords = WORKER_MATCH_EXCLUDE_KEYWORDS) {
   // 英字だけの除外語（CFO・BASE など）は単語として出てきた時だけ当てる（2026-10-09、「ECFORCE」が「CFO」に当たっていた）
   const t = String(title || "");
   const low = t.normalize("NFKC").toLowerCase();
-  const hits = WORKER_MATCH_EXCLUDE_KEYWORDS.filter(k => {
+  const hits = keywords.filter(k => {
     if (/^[\x00-\x7f]+$/.test(k)) {
       const re = new RegExp("(^|[^a-z])" + k.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z])");
       return re.test(low);
@@ -513,6 +513,23 @@ function isExcluded(title) {
   if (!hits.length) return false;
   // 2026-10-12、「LP＆広告バナーデザイン」「LP・バナーデザイン」も外さない（「LP・バナー制作」のデザイナー募集は外れたまま）
   return !(hits.every(k => SOFT_EXCLUDE_KEYWORDS.includes(k)) && /コーディング|lpデザイン|lp\s*[&・\/と]?\s*(?:広告)?\s*バナーデザイン/.test(low));
+}
+
+// デザインの仕事（チラシ・名刺・ロゴ・バナー・パッケージ）も拾う（2026-10-12、ユーザー「じゃあ仕事増やそう」。
+// affiliate-pipeline の worker_matcher.py の design_kind / is_design_job と同じ。Instagram投稿・未経験歓迎などの
+// 大量募集や、配る・貼る・入力などの作業は外す。サイト制作の判定（isExcluded）は今までどおり）
+const DESIGN_KIND_RE = /ロゴ(?!入)|名刺|ショップカード|スタンプカード|ポイントカード|パッケージ|ラベル|容器|化粧箱|チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|看板(?!商品|娘)|(^|[^a-z])(?:pop|dm)(?![a-z])|バナー|ヘッダー画像/;
+const DESIGN_STRONG_RE = /チラシ|フライヤー|名刺|ロゴ(?!入)|パンフレット|リーフレット|ポスター|ショップカード|バナー/;
+const DESIGN_WORK_RE = /デザイン|制作|作成|作って|作り|一新|リニューアル|ブラッシュアップ/;
+const DESIGN_BLOCK_RE = /instagram|インスタ|sns|投稿|フィード|ストーリー|リール|threads|tiktok|youtube|サムネ|未経験|初心者|[2-5]0代|(?:主婦|学生|ママ)(?:さん)?(?:歓迎|の方)|スタッフ|副業|在宅ワーク|完全在宅|デザイナー(?:さん)?を?募集|クリエイター(?:さん)?を?募集|メンバー|長期|月額|常駐|出社|週\d|1\s*(?:枚|本|投稿|点)(?:あたり)?\s*[\d,]+\s*円|配布|ポスティング|手配り|入力|貼り|発送|封入|施工|設置|取り付け|取付|アプリ|管理システム|システムの?開発|翻訳|文字起こし|生成ai|ai画像|画像生成/;
+const DESIGN_EXCLUDE_EXEMPT = ["ポスター", "チラシ", "名刺", "バナー", "パンフレット", "冊子", "ショップカード", "ロゴ", "販促物", "営業", "広告クリエイティブ"];
+
+function isDesignJob(title) {
+  const t = String(title || "");
+  const low = t.normalize("NFKC").toLowerCase();
+  if (!(DESIGN_STRONG_RE.test(low) || (DESIGN_KIND_RE.test(low) && DESIGN_WORK_RE.test(low)))) return false;
+  if (DESIGN_BLOCK_RE.test(low)) return false;
+  return !isExcluded(t, WORKER_MATCH_EXCLUDE_KEYWORDS.filter(k => !DESIGN_EXCLUDE_EXEMPT.includes(k)));
 }
 
 function slim(row, statusHint) {
@@ -556,7 +573,7 @@ function buildData(rows) {
   let pending = rows.filter(r =>
     r[COL.status] === "未チェック" &&
     WORKER_MATCH_CATEGORIES.has(r[COL.category]) &&
-    !isExcluded(r[COL.title])
+    (!isExcluded(r[COL.title]) || isDesignJob(r[COL.title]))
   );
   pending.reverse();
   pending = pending.slice(0, 60).map(r => slim(r, "pending"));

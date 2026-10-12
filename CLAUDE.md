@@ -35,6 +35,11 @@
   `dispatch-viewer/index.html` の同名の JS 定数
   （「題名に制作の作業がはっきり書いてあれば外さない」除外語 `worker_matcher.SOFT_EXCLUDE_KEYWORDS` も、
   dispatch-viewer と docs の index.html の `SOFT_EXCLUDE_KEYWORDS`・`isExcluded` と揃える）
+- 2026-10-12〜、サイト制作のほかに**チラシ・名刺・ロゴ・バナー・パッケージのデザインの仕事**も拾う（ユーザー「じゃあ仕事増やそう」。
+  ワーカーには Fiverr で仕事が決まってから頼む）。判定は `worker_matcher.job_passes`（サイト制作の今までの判定 か `is_design_job`）。
+  `design_kind` / `is_design_job` / `DESIGN_EXCLUDE_EXEMPT` を変えたら、dispatch-viewer と docs の `isDesignJob`・`DESIGN_*` も揃える。
+  Instagram投稿・未経験歓迎などの大量募集、配布・入力・施工などの作業は `_DESIGN_BLOCK_RE` で外す。提案文は `DESIGN_SAMPLES_URL`
+  （ポートフォリオの design.html、架空のお店のサンプル）を案内する
 - cron は毎時0分を避けて分をずらす（0分は数時間遅れたことがある）
 - スプレッドシートの列：S=応募者数、T=募集文。列を足すときは `SheetsWriter` が足りない列を追加する作りを保つ
 - テスト：`cd job_scraper && python -m unittest discover -s tests -v`。

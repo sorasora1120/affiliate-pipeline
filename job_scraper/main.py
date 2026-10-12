@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 import config
 from src.coconala_scraper import CoconalaScraper
 from src.crowdworks_scraper import CrowdWorksBlocked, CrowdWorksScraper
-from src.worker_matcher import is_relevant_title, title_has_excluded
+from src.worker_matcher import job_passes
 from src.detail_fetcher import fetch_client_info
 from src.notifier import notify_discord, notify_error
 from src.proposal_generator import generate_proposal
@@ -125,11 +125,11 @@ def run() -> None:
     # 詳細ページを1件ずつ開くだけでタイムアウト（45分）に達して何も書き込めなかった。
     # タイトルがサイト制作系で除外キーワードに当たらない案件に絞り、1回あたりの
     # 上限も設ける（上限を超えた分は依頼者情報なしで登録される）。
+    # 2026-10-12、チラシ・名刺・ロゴなどデザインの仕事も同じ判定（worker_matcher.job_passes）で拾う
     info_targets = [
         job for job in new_jobs
         if job.category in config.WORKER_MATCH_CATEGORIES
-        and is_relevant_title(job.title)
-        and not title_has_excluded(job.title, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
+        and job_passes(job.title, config.WORKER_MATCH_EXCLUDE_KEYWORDS)
     ][:MAX_DETAIL_FETCH]
     client_info_map: dict[str, dict] = {}
     if info_targets:

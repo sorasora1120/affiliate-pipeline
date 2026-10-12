@@ -40,6 +40,8 @@ TYPE_JA = {
     "ec": "ネットショップ", "lp": "LP", "nocode": "STUDIO等", "recruit": "採用サイト",
     "renewal": "リニューアル", "shop": "お店", "corporate": "会社", "wordpress": "WordPress",
     "fix": "修正・更新", "coding": "コーディング", "visual": "メインビジュアル", "default": "その他",
+    # 2026-10-12、デザインの仕事
+    "logo": "ロゴ", "card": "名刺・カード", "package": "パッケージ・ラベル", "flyer": "チラシ・印刷物", "banner": "バナー",
 }
 
 
