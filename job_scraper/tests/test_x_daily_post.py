@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from x_daily_post import image_for, load_posts, message, today_index
+from x_daily_post import image_for, load_images, load_posts, message, today_index
 
 
 class XDailyPostTest(unittest.TestCase):
@@ -27,3 +27,20 @@ class XDailyPostTest(unittest.TestCase):
         self.assertIn("x-images/salon.jpg", message(post, 2, 39))
         self.assertEqual(image_for("ホームページのコツ"), "")
         self.assertNotIn("付ける画像", message("ホームページのコツ", 0, 39))
+
+    def test_images_come_from_the_shared_list(self):
+        # 2026-10-12〜、x_posts.js の X_IMAGES（X_DAILY と同じ並び）で案ごとに画像を決める
+        js = 'var X_DAILY = [\n  "一つ目",\n  "二つ目",\n];\nvar X_IMAGES = [\n  "x-images/a.jpg",\n  "",\n];\nfunction f() {}'
+        self.assertEqual(load_posts(js), ["一つ目", "二つ目"])
+        self.assertEqual(load_images(js), ["x-images/a.jpg", ""])
+        self.assertTrue(image_for("一つ目", "x-images/a.jpg").endswith("/dispatch-viewer/main/x-images/a.jpg"))
+        self.assertIn("x-images/a.jpg", message("一つ目", 0, 2, image_for("一つ目", "x-images/a.jpg")))
+        self.assertNotIn("付ける画像", message("二つ目", 1, 2, image_for("二つ目", "")))
+        self.assertEqual(load_images('var X_DAILY = [\n  "a",\n];'), [])
+
+    def test_names_in_the_header_comment_are_ignored(self):
+        # 先頭のコメントに「var X_IMAGES = [」と書いてあっても、本物の並びを読む
+        js = ('// 「var X_DAILY = [」と「var X_IMAGES = [」から読む\nvar X_DAILY = [\n  "一つ目",\n];\n'
+              'var X_IMAGES = [\n  "x-images/a.jpg",\n];\n')
+        self.assertEqual(load_posts(js), ["一つ目"])
+        self.assertEqual(load_images(js), ["x-images/a.jpg"])
