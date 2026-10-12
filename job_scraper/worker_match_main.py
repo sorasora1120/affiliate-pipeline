@@ -18,7 +18,7 @@ import sys
 
 import config
 from src import sheet_lock
-from src.expiry_checker import CLOSED_STATUS, find_closed_rows
+from src.expiry_checker import CLOSED_STATUS, COMPETITION_STATUS, find_closed_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 from src.worker_matcher import red_flag
@@ -116,6 +116,15 @@ def _run_locked() -> None:
                 logger.info("要注意の案件を外しました row=%s（%s）", row, why)
             flagged_set = {row for row, _ in flagged}
             candidates = [c for c in candidates if c["row"] not in flagged_set]
+        competition = {c["row"] for c in candidates if page_info.get(c["row"], {}).get("competition")}
+        if competition:
+            # 先に作品を出すコンペ形式は受けられないので外す（2026-10-12）
+            sheet.worksheet.batch_update(
+                [{"range": f"A{row}", "values": [[COMPETITION_STATUS]]} for row in sorted(competition)],
+                value_input_option="RAW",
+            )
+            logger.info("コンペ形式の案件を%d件外しました", len(competition))
+            candidates = [c for c in candidates if c["row"] not in competition]
         if closed_rows:
             closed_set = set(closed_rows)
             updates = [{"range": f"A{row}", "values": [[CLOSED_STATUS]]} for row in closed_rows]

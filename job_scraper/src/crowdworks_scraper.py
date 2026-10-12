@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 from playwright.sync_api import sync_playwright
 
+from .cw_page import is_competition
 from .deadline_utils import normalize_deadline
 from .models import JobPosting
 
@@ -148,6 +149,7 @@ class CrowdWorksScraper:
         全部が一覧本体のもので、おすすめ等のウィジェットは無かったので絞らない（関連判定はマッチング側でする）。
         """
         results: list[JobPosting] = []
+        skipped_competition = 0
         links = page.locator("a[href*='/public/jobs/']")
         count = links.count()
         seen_ids: set[str] = set()
@@ -185,6 +187,11 @@ class CrowdWorksScraper:
             if require_keyword and keyword not in title and keyword not in surrounding:
                 continue
 
+            # コンペ形式は集めない（先に作品を出す形式で、受けられないため。cw_page.is_competition）
+            if is_competition(surrounding):
+                skipped_competition += 1
+                continue
+
             budget_range_match = BUDGET_RANGE_RE.search(surrounding)
             if budget_range_match:
                 budget_text = budget_range_match.group(0)
@@ -212,4 +219,6 @@ class CrowdWorksScraper:
                 detected_at=datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
             ))
 
+        if skipped_competition:
+            logger.info("コンペ形式の案件を%d件スキップしました（%s）", skipped_competition, keyword)
         return results

@@ -19,7 +19,7 @@ from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
 
-from .cw_page import parse_applicants, parse_description
+from .cw_page import is_competition, parse_applicants, parse_description
 from .deadline_utils import normalize_deadline
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,9 @@ _DEADLINE_SEARCH_WINDOW = 60  # ラベル直後、この文字数以内だけを
 
 CLOSED_STATUS = "対象外（募集終了）"
 STALE_STATUS = "対象外（鮮度切れ）"
+# 先に作品を出すコンペ形式（2026-10-12）。集める時にも外すが、一覧のカードから分からなかった分と、
+# それより前に入った行は、ここで詳細ページを開いた時に外す（cw_page.is_competition）
+COMPETITION_STATUS = "対象外（コンペ）"
 
 # 2026-08-12、ユーザーの実測（3日より古い提案済みを手動除外）に合わせた閾値。
 # 古い案件ほど実際には既に決まっている可能性が高いため、ライブチェックで
@@ -90,8 +93,8 @@ def find_closed_rows(
     締切は、詳細ページを開いたその日を基準に絶対日付へ正規化して返す
     （収集時点ではなく、いま開いて分かった残り日数のため）。既に募集終了と
     判定した行は締切を取り直す意味がないので対象に含めない。
-    page_info_outを渡すと、開いたついでにCrowdWorksの最新の応募者数と募集文を
-    {行番号: {"applicants": ..., "description": ...}} で書き足す（2026-10-08）。
+    page_info_outを渡すと、開いたついでにCrowdWorksの最新の応募者数と募集文、コンペ形式かどうかを
+    {行番号: {"applicants": ..., "description": ..., "competition": bool}} で書き足す（2026-10-08、コンペは2026-10-12）。
     """
     closed_rows: list[int] = []
     deadlines: dict[int, str] = {}
@@ -121,6 +124,7 @@ def find_closed_rows(
                     page_info_out[row_number] = {
                         "applicants": parse_applicants(body_text),
                         "description": parse_description(body_text),
+                        "competition": is_competition(body_text),
                     }
                 label = _CW_DEADLINE_LABEL if "crowdworks.jp" in url else _CO_DEADLINE_LABEL
                 label_pos = body_text.find(label)

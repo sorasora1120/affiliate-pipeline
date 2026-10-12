@@ -18,7 +18,7 @@ import sys
 
 import config
 from src import sheet_lock
-from src.expiry_checker import STALE_STATUS, find_closed_rows, find_stale_rows
+from src.expiry_checker import COMPETITION_STATUS, STALE_STATUS, find_closed_rows, find_stale_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
 
@@ -103,6 +103,15 @@ def _run_locked() -> None:
                     sum(1 for d in page_info.values() if d["description"]))
     logger.info("募集終了: %d/%d件", len(closed_rows), len(url_rows))
 
+    # 先に作品を出すコンペ形式は受けられないので外す（2026-10-12。それより前に「提案済み」になった行も）
+    competition_rows = sorted(row for row, d in page_info.items() if d.get("competition"))
+    if competition_rows:
+        sheet.worksheet.batch_update(
+            [{"range": f"A{row}", "values": [[COMPETITION_STATUS]]} for row in competition_rows],
+            value_input_option="RAW",
+        )
+        logger.info("コンペ形式: %d件を「%s」にしました", len(competition_rows), COMPETITION_STATUS)
+
     if deadlines:
         # 詳細ページから取り直した正確な締切をシートに書き戻す（2026-08-14、
         # 「全部に残り日数を書いて」との要望を受けて追加。検索結果一覧からは
@@ -119,7 +128,7 @@ def _run_locked() -> None:
     row_by_number = {i: r for i, r in enumerate(rows, start=2)}
     stale_rows = [
         r for r in find_stale_rows(rows, config.PLATFORMS)
-        if r not in set(closed_rows) and not _is_actively_pursued(row_by_number.get(r, {}))
+        if r not in set(closed_rows) | set(competition_rows) and not _is_actively_pursued(row_by_number.get(r, {}))
     ]
     logger.info("鮮度切れ（検出から3日超）: %d件", len(stale_rows))
     if stale_rows:
