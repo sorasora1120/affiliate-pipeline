@@ -246,6 +246,13 @@ _TYPE_TEXT: dict[str, dict] = {
         "samples": ["accounting"],
         "team": ["skyfox", "gipsyqueens"],
     },
+    "visual": {
+        "plan": "今のサイト・ご要望の確認 → 構図のラフ → デザイン → PC・スマホで見え方の確認 → 納品",
+        "point": "メインビジュアルは、サイトを開いて最初に目に入る1枚なので、何のサイトかが一瞬で伝わる形に仕上げます。",
+        "questions": ["今のサイトのURLと、入れたい言葉（キャッチコピー）や使える写真があるかどうか", "画像の大きさ（PC・スマホそれぞれ）の指定があるかどうか"],
+        "samples": ["accounting"],
+        "team": ["skyfox", "gipsyqueens"],
+    },
     "coding": {
         "plan": "デザインの確認 → HTML・CSSでコーディング → PC・スマホ・主なブラウザで表示確認 → 納品",
         "point": "いただいたデザインを、PCでもスマホでもずれなく再現し、あとから直しやすいコードでお渡しします。",
@@ -262,10 +269,23 @@ _TYPE_TEXT: dict[str, dict] = {
 _BUILD_RE = re.compile(r"リニューアル|制作|作成|構築|新規|立ち上げ")
 _FIX_RE = re.compile(r"修正|更新|追加|差し替え|差替|変更|移行|流し込み|不具合|表示崩れ|カスタマイズ|改善")
 _CODING_RE = re.compile(r"コーディング|(?<![a-z])(?:html|css|javascript|js)(?![a-z])|レスポンシブ|実装")
+# サイトそのものではなく、メインビジュアル（最初の画面の大きな画像）だけを作る依頼（2026-10-12）。
+# 「司法書士事務所Webサイトのメインビジュアル画像制作」に「会社」の型の「実績・所在地…がすぐ見つかる構成」
+# 「問い合わせフォーム」「入れたいページを教えて」が入っていた。「LP作成: 説明文章/KV/コピー提案」や
+# 「LP制作（ファーストビューのデザインから）」のように、LPやサイトを作る中の一部なら今までどおり
+_VISUAL_RE = re.compile(r"(?:メインビジュアル|キービジュアル|(?<![a-z])kv(?![a-z])|ファーストビュー|ヘッダー画像|トップ画像|ヒーロー画像)"
+                        r"\s*の?\s*(?:画像)?\s*の?\s*(?:制作|作成|デザイン)")
+_WHOLE_BUILD_RE = re.compile(r"(?:lp|サイト|ホームページ|hp|ページ)\s*の?\s*(?:制作|作成|構築|デザイン)")
+# 「（LP/HP）」はどちらでもよいという意味なので、LPの型に決めない（2026-10-12、「夜カフェ＆バー｜公式Webサイト
+# （LP/HP）デザイン制作」がLPの型になり、お店の予約や雰囲気ではなく申し込みボタンやフォームの話になっていた）
+_LP_OR_HP_RE = re.compile(r"lp\s*[/・or]+\s*hp|hp\s*[/・or]+\s*lp")
 
 
 def job_type(title: str) -> str:
     t = _normalize(title)
+    if _VISUAL_RE.search(t) and not _WHOLE_BUILD_RE.search(t):
+        return "visual"
+    t = _LP_OR_HP_RE.sub("hp", t)
     if not _BUILD_RE.search(t):
         if _FIX_RE.search(t):
             return "fix"
@@ -393,6 +413,11 @@ _PITCH: dict[str, dict] = {
         "ideas": ["作業の前にバックアップを取って、今のページを壊さずに進める", "PC・スマホの両方で表示を確かめてからお渡し",
                   "直した所の一覧をお送りして、確認しやすく"],
     },
+    "visual": {
+        "hook": "メインビジュアルは、開いて3秒で「何の・誰のためのサイトか」が伝わることが一番大事だ",
+        "ideas": ["何をしている所かが、ひと目で分かる言葉と写真の組み合わせ", "スマホの縦長の画面でも、文字が切れずに読める配置",
+                  "サイトの色や文字に合わせて、浮かない仕上がり"],
+    },
     "coding": {
         "hook": "コーディングは、デザインの細かい余白や文字の大きさまで、そのまま再現できるかが一番大事だ",
         "ideas": ["デザインの通りに、PC・スマホの両方でずれなく組む", "Chrome・Safari など主なブラウザで表示を確かめてからお渡し",
@@ -400,7 +425,7 @@ _PITCH: dict[str, dict] = {
     },
 }
 # 作業だけの依頼では、募集文に合わせた入れ替え（インスタ連携・SEO・雰囲気づくりなど、新しく作る時の話）をしない
-_WORK_ONLY_TYPES = ("fix", "coding")
+_WORK_ONLY_TYPES = ("fix", "coding", "visual")
 # 募集文に出てくる言葉 → その案件に合わせた一行（業種の型より優先して、最大2つ入れ替える）
 _IDEA_EXTRAS: list[tuple[list[str], str]] = [
     (["instagram", "インスタ"], "インスタの最新投稿をサイトに自動で表示"),
@@ -478,6 +503,8 @@ def _rough_line(title: str) -> str:
     """契約前に見せるもの。案件の大きさに合わせる（2026-10-09、ファーストビュー1画面だけの依頼や
     小さな修正にも「トップページの構成図」と書いていて、募集を読んでいないように見えたため）。"""
     t = _normalize(title)
+    if job_type(title) == "visual":
+        return "ご契約前に、構図のラフをお見せできます。"
     if re.search(r"ファーストビュー|メインビジュアル|(?<![a-z])(?:fv|mv)(?![a-z])", t):
         return "ご契約前に、ファーストビューのラフをお見せできます。"
     if job_type(title) in _WORK_ONLY_TYPES or (re.search(r"設定|フォーム", t) and not _BUILD_RE.search(t)):

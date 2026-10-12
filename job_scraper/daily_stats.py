@@ -39,7 +39,7 @@ HIRED = {"hired", "ordered"}
 TYPE_JA = {
     "ec": "ネットショップ", "lp": "LP", "nocode": "STUDIO等", "recruit": "採用サイト",
     "renewal": "リニューアル", "shop": "お店", "corporate": "会社", "wordpress": "WordPress",
-    "fix": "修正・更新", "coding": "コーディング", "default": "その他",
+    "fix": "修正・更新", "coding": "コーディング", "visual": "メインビジュアル", "default": "その他",
 }
 
 

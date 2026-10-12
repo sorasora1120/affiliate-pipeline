@@ -159,6 +159,39 @@ class WorkOnlyJobTypeTest(unittest.TestCase):
                             ("カフェのホームページ制作", "shop")]:
             self.assertEqual(job_type(title), want, title)
 
+    def test_main_visual_jobs_get_their_own_type(self):
+        """2026-10-12、メインビジュアルの画像だけの依頼に「会社」の型の構成やフォームの話が入っていた。"""
+        from src.worker_matcher import job_type
+        for title, want in [("司法書士事務所Webサイトのメインビジュアル画像制作", "visual"),
+                            ("ヘッダー画像の作成をお願いします", "visual"),
+                            ("LPのファーストビューのデザイン", "visual"),
+                            # LPやサイトを作る中の一部なら、今までどおり
+                            ("[複数人採用あり] 体験型エンターテイメントのLP作成: 説明文章/KV/コピー提案", "lp"),
+                            ("LP制作（ファーストビューのデザインからお願いします）", "lp"),
+                            ("ホームページ制作（メインビジュアルの作成込み）", "default")]:
+            self.assertEqual(job_type(title), want, title)
+
+    def test_lp_or_hp_is_not_decided_as_lp(self):
+        """「（LP/HP）」はどちらでもよいという意味なので、業種の型で書く（2026-10-12）。"""
+        from src.worker_matcher import job_type
+        self.assertEqual(job_type("隠れ家夜カフェ＆バー｜公式Webサイト（LP/HP）デザイン制作"), "shop")
+        self.assertEqual(job_type("美容クリニックのLP制作"), "lp")
+
+    def test_main_visual_proposal_talks_about_the_image(self):
+        from src.worker_matcher import proposal_and_worker_message
+        c = {"row": 2, "platform": "CrowdWorks", "category": "ホームページ制作",
+             "title": "司法書士事務所Webサイトのメインビジュアル画像制作",
+             "url": "https://crowdworks.jp/public/jobs/1", "client_name": "テスト", "rating": "", "order_count": "",
+             "description": "信頼感のあるメインビジュアルをお願いします。インスタも運用しています。",
+             "amount": 30000, "fee": 6000, "margin": 6000, "quote": 18000}
+        proposal, _ = proposal_and_worker_message(c)
+        self.assertIn("メインビジュアルは", proposal)
+        self.assertIn("キャッチコピー", proposal)
+        self.assertIn("構図のラフ", proposal)
+        self.assertNotIn("問い合わせフォーム", proposal)
+        self.assertNotIn("入れたいページ", proposal)
+        self.assertNotIn("インスタの最新投稿", proposal)
+
     def test_coding_proposal_talks_about_the_work_not_a_new_site(self):
         from src.worker_matcher import proposal_and_worker_message
         c = {"row": 2, "platform": "CrowdWorks", "category": "HTMLコーディング",
