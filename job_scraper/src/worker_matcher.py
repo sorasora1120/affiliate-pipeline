@@ -111,10 +111,17 @@ def has_weak_web_word(title: str) -> bool:
 # 種類は上から順に最初に当たったもの（「ロゴと名刺」はロゴ）
 _DESIGN_KINDS: list[tuple[str, re.Pattern]] = [
     ("logo", re.compile(r"ロゴ(?!入)")),
+    # イラスト（2026-10-12夜、ユーザー「もっと仕事のはばふやして」）。CrowdWorks の「イラスト作成」には、1万円以上の普通の依頼が
+    # 1日1〜2件ある（「歌ってみたで使用するイラスト作成依頼」「自動車イラスト描き起こし」「マニュアル動画に使うイラスト」など）。
+    # 「イラスト入りのチラシ」はチラシなので、イラストのすぐあとに作業の言葉が続く言い方と、イラストの仕事だと分かる言葉だけ
+    ("illust", re.compile(r"イラスト(?:の|を)?(?:作成|制作|デザイン|依頼|描き|作画)|挿絵|似顔絵|イラストレーター|(?<![a-z])live2d(?![a-z])|"
+                          r"立ち絵|キャラクター(?:の)?(?:デザイン|イラスト|制作|作成)|マスコット(?:キャラクター|キャラ)?(?:の)?(?:デザイン|制作|作成)")),
     ("card", re.compile(r"名刺|ショップカード|スタンプカード|ポイントカード")),
     ("package", re.compile(r"パッケージ|ラベル|容器|化粧箱")),
-    ("flyer", re.compile(r"チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|"
-                         r"看板(?!商品|娘)|(?<![a-z])(?:pop|dm)(?![a-z])")),
+    # 2026-10-12夜、取扱説明書・封筒・はがき・年賀状・のぼり・タペストリー・横断幕なども（印刷物として）
+    ("flyer", re.compile(r"チラシ|フライヤー|パンフレット|リーフレット|ポスター|冊子|カタログ|会社案内|メニュー表|メニューブック|"
+                         r"看板(?!商品|娘)|(?<![a-z])(?:pop|dm)(?![a-z])|取扱説明書|説明書(?:の)?(?:デザイン|制作|作成)|封筒|はがき|ハガキ|"
+                         r"年賀状|のぼり|タペストリー|横断幕|懸垂幕|ロールスクリーン")),
     ("banner", re.compile(r"バナー|ヘッダー画像")),
 ]
 # それだけでデザインの依頼だと分かる言葉。ほかの言葉（パッケージ・看板など）は、作業の言葉があるときだけ
@@ -133,18 +140,24 @@ _DESIGN_BLOCK_RE = re.compile(
 # 方募集✨継続依頼あり」「旅好きな方へ｜宿特集のバナー制作」「〜の魅力を届ける｜バナー作成」などが9件通った）。
 # 絵文字・テーマ紹介・継続・人集めの言い方があれば外す（LPと一緒の依頼は除く）
 _BANNER_BLOCK_RE = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]|紹介する|特集|魅力|彩る|方へ|継続|簡単な|好きな方|くださる方")
-# デザインの仕事では外さない除外語（サイト制作の判定では、今までどおり外す）
+# イラストで外すもの：紙に描いて郵送する作業・模写・塗り絵・AIで作るイラスト・成人向け
+_ILLUST_BLOCK_RE = re.compile(r"手描き作業|画材|郵送|模写|塗り絵|aiイラスト|nsfw|成人向け|セクシー")
+# デザインの仕事では外さない除外語（サイト制作の判定では、今までどおり外す）。イラスト・キャラクターは
+# 2026-10-12夜から（前のワーカーはWeb制作だけだったので外していた）
 DESIGN_EXCLUDE_EXEMPT = ("ポスター", "チラシ", "名刺", "バナー", "パンフレット", "冊子", "ショップカード", "ロゴ",
-                         "販促物", "営業", "広告クリエイティブ")
+                         "販促物", "営業", "広告クリエイティブ",
+                         "イラスト", "キャラクターデザイン", "キャラクター制作", "キャラクター作成", "立ち絵")
+# イラストの依頼だけ外さない除外語（「マニュアル動画に使うイラスト」。動画そのものの制作は今までどおり外す）
+ILLUST_EXCLUDE_EXEMPT = ("動画",)
 
 
 def design_kind(title: str) -> str:
-    """デザインの依頼なら種類（logo / card / package / flyer / banner）、違えば空文字。"""
+    """デザインの依頼なら種類（logo / illust / card / package / flyer / banner）、違えば空文字。"""
     t = _normalize(title)
     has_work = bool(_DESIGN_WORK_RE.search(t))
     for kind, pattern in _DESIGN_KINDS:
         for m in pattern.finditer(t):
-            if has_work or _DESIGN_STRONG_RE.fullmatch(m.group(0)):
+            if has_work or kind == "illust" or _DESIGN_STRONG_RE.fullmatch(m.group(0)):
                 return kind
     return ""
 
@@ -157,7 +170,10 @@ def is_design_job(title: str, excluded_keywords: list[str]) -> bool:
         return False
     if kind == "banner" and _BANNER_BLOCK_RE.search(t) and not re.search(r"(?<![a-z])lp(?![a-z])|ランディング", t):
         return False
-    return not excluded_hit(title, [kw for kw in excluded_keywords if kw not in DESIGN_EXCLUDE_EXEMPT])
+    if kind == "illust" and _ILLUST_BLOCK_RE.search(t):
+        return False
+    exempt = DESIGN_EXCLUDE_EXEMPT + (ILLUST_EXCLUDE_EXEMPT if kind == "illust" else ())
+    return not excluded_hit(title, [kw for kw in excluded_keywords if kw not in exempt])
 
 
 def job_passes(title: str, excluded_keywords: list[str]) -> bool:
@@ -179,7 +195,7 @@ _ESTIMATE_RULES: list[tuple[list[str], int]] = [
 
 
 # デザインの仕事の目安額（2026-10-12、クラウドワークスで同じ種類の依頼に多い金額の下の方）
-_DESIGN_ESTIMATES = {"logo": 30000, "package": 40000, "flyer": 20000, "card": 10000, "banner": 10000}
+_DESIGN_ESTIMATES = {"logo": 30000, "package": 40000, "flyer": 20000, "card": 10000, "banner": 10000, "illust": 20000}
 
 
 def estimate_amount(title: str, fallback_yen: int) -> int:
@@ -328,6 +344,12 @@ _TYPE_TEXT: dict[str, dict] = {
         "plan": "ご要望の確認 → 方向性の違う案 → 1案にしぼって仕上げ → 使う場所に合わせたパターン → データ一式で納品",
         "point": "ロゴは長く使うものなので、名刺の小さな文字の横でも看板でも見やすい形に仕上げます。",
         "questions": ["お名前（会社名・店名）の表記（日本語・英字）と、好きな雰囲気や使いたい色", "ロゴを主に使う場所（看板・名刺・Web・SNSなど）"],
+        "samples": [], "team": [],
+    },
+    "illust": {
+        "plan": "使う場所とタッチの確認 → ラフ → 線画 → 色 → ご確認・修正 → 納品",
+        "point": "イラストは、ラフ・線画・色の段階ごとに確認していただきながら、イメージ通りに仕上げます。",
+        "questions": ["使う場所（Web・印刷・動画など）と、必要なサイズ・点数", "参考にしたいイラストや、タッチのイメージ（あれば）"],
         "samples": [], "team": [],
     },
     "card": {
@@ -530,6 +552,11 @@ _PITCH: dict[str, dict] = {
         "ideas": ["名刺の小さな文字の横でも、看板の大きさでも見やすい形", "カラー・白黒・横長・正方形など、使う場所に合わせたパターン",
                   "AI・PNG・SVGのデータを一式でお渡し"],
     },
+    "illust": {
+        "hook": "イラストは、描き始める前に「タッチ（線や塗りの雰囲気）」と「使う場所」をすり合わせておくことが一番大事だ",
+        "ideas": ["参考のイラストをいただき、線の太さや塗り方をすり合わせてから描き始める", "ラフ・線画・色の段階ごとに確認していただき、大きな描き直しを防ぐ",
+                  "使う場所に合わせたサイズと形式（PNG透過・レイヤー分けしたPSDなど）でお渡し"],
+    },
     "card": {
         "hook": "名刺は、あとで見返したときに「誰で・何をしている人か」がすぐ分かることが一番大事だ",
         "ideas": ["お名前とお仕事の内容が、ひと目で分かる配置", "会社やお店の雰囲気に合う色と書体",
@@ -557,8 +584,8 @@ _PITCH: dict[str, dict] = {
     },
 }
 # 作業だけの依頼では、募集文に合わせた入れ替え（インスタ連携・SEO・雰囲気づくりなど、新しく作る時の話）をしない
-_WORK_ONLY_TYPES = ("fix", "coding", "visual", "logo", "card", "package", "flyer", "banner")
-DESIGN_TYPES = ("logo", "card", "package", "flyer", "banner")
+_WORK_ONLY_TYPES = ("fix", "coding", "visual", "logo", "illust", "card", "package", "flyer", "banner")
+DESIGN_TYPES = ("logo", "illust", "card", "package", "flyer", "banner")
 # デザインの仕事の提案文で見てもらうページ（架空のお店のチラシ・名刺・ロゴ・バナー・パッケージ。sorasora1120.github.io）
 DESIGN_SAMPLES_URL = PORTFOLIO_BASE_URL + "design.html"
 # 募集文に出てくる言葉 → その案件に合わせた一行（業種の型より優先して、最大2つ入れ替える）
@@ -662,7 +689,11 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         ideas = ideas[:2] + ["ホームページも、ロゴと同じ雰囲気でそろえてお作りできます"]
     elif key not in DESIGN_TYPES and "ロゴ" in t:
         ideas = ideas[:2] + ["ロゴも、サイトと同じ雰囲気でそろえてお作りします"]
-    if key in DESIGN_TYPES:
+    if key == "illust":
+        # デザインのサンプルのページにイラストは無いので、作品例は担当するイラストレーターのものを返信のあとに送る（2026-10-12夜）
+        look, portfolio = "イラストは、ご希望のタッチに合うイラストレーターと一緒に制作します。", DESIGN_SAMPLES_URL
+        note = "こちらはロゴ・チラシなどのデザインのサンプルです。イラストの作品例は、ご希望のタッチを伺ってから、担当するイラストレーターのものをお送りします。"
+    elif key in DESIGN_TYPES:
         look, portfolio = "まずはデザインのサンプルをご覧ください。", DESIGN_SAMPLES_URL
         note = "チラシ・名刺・ロゴ・バナー・パッケージのサンプルを1ページにまとめています（1分で見られます）。"
     else:
@@ -676,6 +707,8 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         "portfolio_note": note,
         "question": spec["questions"][0],
         "rough": _rough_line(title),
+        "closing": ("ご希望のタッチや参考のイラストを教えていただければ、作品例をお送りします。お気軽にご返信ください。" if key == "illust"
+                    else "上のページで雰囲気が合いそうでしたら、お気軽にご返信ください。"),
     }
 
 
@@ -697,7 +730,7 @@ _OUTRO = """
 差し支えなければ、{question}を教えてください。
 やり取りはこちらのメッセージで、24時間以内にお返事します（窓口はずっと私ひとりです）。決まったことは毎回文章でまとめてお送りします。
 
-上のページで雰囲気が合いそうでしたら、お気軽にご返信ください。
+{closing}
 ソラ"""
 
 PROPOSAL_TEMPLATE = _INTRO + """
