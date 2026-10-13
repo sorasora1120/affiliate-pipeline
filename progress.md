@@ -312,6 +312,13 @@
 - 「なんかまだパッとしない」→ 架空のカフェの英語サイトを作りかけたが「作んなくていいから料金表と進め方、お客さんに見せる何をするのかを書いて」と言われ、
   dispatch-viewer に `local.html`（料金表・進め方・英語の台本・見せる紙のリンク作り）と `local-en.html`（お客さんに見せる英語の1枚、印刷でレター1枚）を作った。
   営業ページの一番上からリンク。写真さがしの一時ブランチ（tmp-cafe-photos / -out）は Actions で消した
+- 同じ日、ユーザーの通学先とバスのターミナルの近く（Windsor 東部）で候補のお店をたくさん出してほしい、とのこと（場所の名前は公開リポジトリに書かない）。
+  Overpass は混んでいて3回失敗（504・タイムアウト）→ **Overture Maps の places**（オープンデータ。店名・住所・電話・websites・socials・業種・
+  confidence・閉店かどうか）を Actions で DuckDB から読んだ（`aws s3 ls --no-sign-request s3://overturemaps-us-west-2/release/` で最新版を選び、
+  `read_parquet(.../theme=places/type=place/*)` を bbox で絞る。2026-09-23.1 で東部 5,987件、数分で終わる）。OSM より小さなお店が多く、サイトの有無も分かる。
+  チェーン・病院・学校などを外し、2点から1.8km以内・websites なし（Instagram・予約サイト・linktree・終了した business.site だけのお店も含む）で約60件を
+  チャットで渡した（リポジトリには置いていない）。検索で確かめたら Smokies Burgers はサイトあり、Ming Wah は2025年に閉店していた → データは古いことがあるので、
+  Googleマップで「開いているか」「ウェブサイトのボタンがないか」を確かめるよう伝えた
 
 ## やり残し・次にやること
 - 親名義の CrowdWorks プロフィールURLができたら、ポートフォリオの問い合わせボタンと sales.html からリンクする
