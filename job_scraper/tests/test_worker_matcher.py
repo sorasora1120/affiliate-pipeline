@@ -466,7 +466,10 @@ class DesignJobTest(unittest.TestCase):
         c["title"] = "コーポレートサイト制作"
         proposal, _ = proposal_and_worker_message(c)
         self.assertIn(PORTFOLIO_BASE_URL + "\n", proposal)
-        self.assertIn("海外向けサイト", proposal)
+        # 2026-10-16〜 日本の依頼には関係がないので「海外向け」とは書かず、最初の3行に金額・納期・実績を入れる
+        self.assertNotIn("海外向け", proposal)
+        self.assertIn("55,000円", "\n".join(proposal.splitlines()[:3]))
+        self.assertIn("納期の目安", proposal)
 
     def test_print_jobs_pass_and_illustration_does_not(self):
         # 2026-10-12夜、ユーザー「もっと仕事のはばふやして」で取扱説明書・封筒・年賀状・のぼりなどの印刷物も拾う。

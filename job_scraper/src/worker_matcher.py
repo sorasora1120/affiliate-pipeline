@@ -666,53 +666,47 @@ def _tailored_parts(title: str, description: str = "") -> dict:
     elif key not in DESIGN_TYPES and "ロゴ" in t:
         ideas = ideas[:2] + ["ロゴも、サイトと同じ雰囲気でそろえてお作りします"]
     if key in DESIGN_TYPES:
-        look, portfolio = "まずはデザインのサンプルをご覧ください。", DESIGN_SAMPLES_URL
-        note = "チラシ・名刺・ロゴ・バナー・パッケージのサンプルを1ページにまとめています（1分で見られます）。"
+        look, portfolio = "デザインのサンプル", DESIGN_SAMPLES_URL
     else:
-        look, portfolio = "まずは制作実績をご覧ください。", PORTFOLIO_BASE_URL
-        note = f"チームで制作した海外向けサイト{len(TEAM_WORKS)}件と、業種別のデザインサンプルを1ページにまとめています（1分で見られます）。"
+        look, portfolio = "制作実績とサンプル", PORTFOLIO_BASE_URL
     return {
         "hook": _PITCH[key]["hook"],
         "ideas": "\n".join(f"・{i}" for i in ideas) + _custom_line(description),
         "look": look,
         "portfolio": portfolio,
-        "portfolio_note": note,
+        "days": _DAYS.get(key, "3〜4週間"),
         "question": spec["questions"][0],
         "rough": _rough_line(title),
     }
 
 
 # 2026-10-08、「文章が長くて読みにくい」「一番大事なポートフォリオへの誘導ができていない」とのことで作り直した。
-# 依頼者の応募一覧で最初に見える2〜3行の中にポートフォリオのURLを入れ、全体も約3分の1の長さにした。
-# 1行目の【案件名】はやめた（応募一覧では案件に紐づいて表示されるので、最初の行をURLの案内に使う）。
-# 2026-10-12、デザインの仕事（チラシ・名刺・ロゴなど）はデザインのサンプルのページを案内する（_tailored_parts）
-_INTRO = """はじめまして、ソラと申します。{look}
-▶ {portfolio}
-{portfolio_note}
+# 2026-10-16、「クラウドワークスほぼ断られる、多分文章が悪い」とのことで作り直した。依頼者の応募一覧で最初に見える
+# 2〜3行に、金額・納期・実績のURLを入れる（それまでは「まずは制作実績をご覧ください」で、何が・いくらで・いつまでかが
+# 下まで読まないと分からなかった）。「海外向けサイト」は日本のお店の依頼には関係がないので書かない。
+# 「やり取りはこちらのメッセージで」は通話を断っているように読めるので、「ご連絡はメッセージで」だけにした。
+_DAYS = {
+    "lp": "2〜3週間", "ec": "4〜6週間", "fix": "3〜5日", "coding": "1〜2週間", "visual": "5〜7日",
+    "logo": "1〜2週間", "card": "5〜7日", "package": "1〜2週間", "flyer": "5〜7日", "banner": "3〜5日",
+}
 
-募集を拝見して、{hook}と思いました。今回はこの3つを大事にします。
+_HEAD = "はじめまして、Web制作のソラと申します。\n"
+
+_BODY = """{look} ▶ {portfolio}
+
+■ ご提案
+{hook}と考えています。今回は次の3つを意識します。
 {ideas}
-"""
+{rough}
 
-# 2026-10-10、初めての返信が「面談（ビデオ通話）をしたい」だった。ユーザーは顔も声も出したくないので、
-# やり取りはメッセージ（文章）でと最初から書き、文章で残ることを良さとして伝える
-_OUTRO = """
 差し支えなければ、{question}を教えてください。
-やり取りはこちらのメッセージで、24時間以内にお返事します（窓口はずっと私ひとりです）。決まったことは毎回文章でまとめてお送りします。
-
-上のページで雰囲気が合いそうでしたら、お気軽にご返信ください。
+ご連絡はメッセージで、24時間以内にお返事します。よろしくお願いいたします。
 ソラ"""
 
-PROPOSAL_TEMPLATE = _INTRO + """
-お見積り：{amount:,}円（一式）
-{rough}
-""" + _OUTRO
+PROPOSAL_TEMPLATE = _HEAD + "お見積り{amount:,}円（一式）、納期の目安は{days}です。\n" + _BODY
 
 # 予算が「見積り希望」等で未提示の案件用（目安額を示し、正式な金額は要件確認後に出す）
-PROPOSAL_TEMPLATE_QUOTE = _INTRO + """
-お見積り：{amount_estimate:,}円前後を想定しています（内容を伺って、正式な金額をお出しします）。
-{rough}
-""" + _OUTRO
+PROPOSAL_TEMPLATE_QUOTE = _HEAD + "お見積りは{amount_estimate:,}円前後、納期の目安は{days}です（内容を伺って確定します）。\n" + _BODY
 
 
 def _calc_margin(amount: int, percent: float, min_yen: int, max_yen: int) -> int:
