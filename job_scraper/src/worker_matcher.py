@@ -457,13 +457,6 @@ def pick_wish_sentence(description: str) -> str:
     return best
 
 
-def _custom_line(description: str) -> str:
-    wish = pick_wish_sentence(description)
-    if not wish:
-        return ""
-    return f"\n募集文の「{wish}」という点も、しっかり形にします。"
-
-
 # 募集文に出てくる言葉 → 構成案に足すページ。すでに似たページがあれば足さない（2つ目以降の語で判定）
 _PLAN_EXTRAS: list[tuple[list[str], str, list[str]]] = [
     # 「実績のある方」「採用させていただいた方」「お知らせください」「アクセス解析」のような
@@ -655,6 +648,72 @@ def _rough_line(title: str) -> str:
     return "ご契約前に、トップページの構成図（ラフ）をお見せできます。"
 
 
+# 2026-10-20、応募213件・返信0件。提案文の1行目が「はじめまして、Web制作のソラと申します。」で、依頼者の応募一覧では
+# どの案件にも同じ文に見えていた → 1行目に題名から取り出した「何を作るか」（「熊本の老舗馬刺し専門店「花びら馬刺し」商品LP」
+# 「パーソナルストレッチスタジオの集客LP」など）と金額・納期を入れる。取り出せない時は種類ごとの言い方にする
+_SUBJECT_NOUN_RE = re.compile(
+    r"(?:ランディングページ|LP|ホームページ|HP|ECサイト|ネットショップ|Webサイト|WEBサイト|webサイト|ウェブサイト|サイト|"
+    r"トップページ|TOPページ|ページ|チラシ|フライヤー|ポスター|パンフレット|リーフレット|カタログ|POP|名刺|ショップカード|"
+    r"ロゴマーク|ロゴ|バナー|パッケージ|ラベル|メニュー表|のぼり|看板)")
+_SUBJECT_EXT_RE = re.compile(r"^(?:の?デザイン(?!ナー|er)|の?コーディング|の?改修|の?リニューアル|の?修正)")
+_SUBJECT_BRACKET_RE = re.compile(r"【([^】]*)】|\[([^\]]*)\]|［([^］]*)］")
+_SUBJECT_PAREN_RE = re.compile(r"（[^）]*）|\([^)]*\)")
+_SUBJECT_SEP_RE = re.compile(r"[｜|┃/／!！?？。☆★♪、]|\s+")
+_SUBJECT_TOOL_RE = re.compile(r"^(?:Illustrator|イラレ|Photoshop|Figma|Canva)(?:で|を使って|を使用して)")
+# 「〜を形にする」「〜を参考に」「〜できる方募集」のように、作る物ではなく条件や前置きの言い方は使わない
+_SUBJECT_BAD = ("そのまま", "参考に", "をもとに", "形にする", "活かし", "募集", "できる方", "お任せ", "担当", "して")
+_SUBJECT_GENERIC = {"HP": "ホームページ"}
+_SUBJECT_BY_TYPE = {
+    "ec": "ネットショップ", "lp": "LP", "nocode": "ホームページ", "recruit": "採用サイト", "renewal": "サイトのリニューアル",
+    "shop": "お店のホームページ", "corporate": "会社のホームページ", "wordpress": "WordPressサイト", "fix": "サイトの修正",
+    "coding": "コーディング", "visual": "メインビジュアル", "default": "ホームページ",
+    "logo": "ロゴ", "card": "名刺", "package": "パッケージ", "flyer": "チラシ", "banner": "バナー",
+}
+
+
+def _subject_clean(text: str) -> str:
+    text = "".join(ch for ch in text if not unicodedata.category(ch).startswith("S") or ch in "・＋+＆&")
+    text = text.strip(" 　・、,.-〜~：:").lstrip("のをにでとがは")
+    for open_, close in ("「」", "『』"):
+        if text.count(open_) != text.count(close):
+            text = text.replace(open_, "").replace(close, "")
+    return text
+
+
+def _subject_from(text: str) -> str:
+    best = ""
+    for seg in _SUBJECT_SEP_RE.split(_SUBJECT_PAREN_RE.sub("", text)):
+        seg = _subject_clean(seg)
+        last = None
+        for m in _SUBJECT_NOUN_RE.finditer(seg):
+            last = m
+        if not last:
+            continue
+        end = last.end()
+        ext = _SUBJECT_EXT_RE.match(seg[end:])
+        if ext:
+            end += ext.end()
+        sub = _subject_clean(_SUBJECT_TOOL_RE.sub("", seg[:end]))
+        if any(w in sub for w in _SUBJECT_BAD):
+            continue
+        if len(sub) > len(best):
+            best = sub
+    return best
+
+
+def job_subject(title: str) -> str:
+    """題名から「何を作るか」を短く取り出す（提案文の1行目に使う）。取り出せない時は種類ごとの言い方を返す。"""
+    title = title or ""
+    inside = " ".join(g for m in _SUBJECT_BRACKET_RE.finditer(title) for g in m.groups() if g)
+    best = _subject_from(_SUBJECT_BRACKET_RE.sub(" ", title)) or _subject_from(inside)
+    if len(best) > 28:
+        cut = best[-28:]
+        i = cut.find("の")
+        best = cut[i + 1:] if 0 <= i < 10 else ""
+    best = _SUBJECT_GENERIC.get(best, best)
+    return best or _SUBJECT_BY_TYPE.get(job_type(title), "ホームページ")
+
+
 def _tailored_parts(title: str, description: str = "") -> dict:
     key = job_type(title)
     spec = _TYPE_TEXT[key]
@@ -671,7 +730,8 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         look, portfolio = "制作実績とサンプル", PORTFOLIO_BASE_URL
     return {
         "hook": _PITCH[key]["hook"],
-        "ideas": "\n".join(f"・{i}" for i in ideas) + _custom_line(description),
+        "ideas": "\n".join(f"・{i}" for i in ideas),
+        "subject": job_subject(title),
         "look": look,
         "portfolio": portfolio,
         "days": _DAYS.get(key, "3〜4週間"),
@@ -685,12 +745,15 @@ def _tailored_parts(title: str, description: str = "") -> dict:
 # 2〜3行に、金額・納期・実績のURLを入れる（それまでは「まずは制作実績をご覧ください」で、何が・いくらで・いつまでかが
 # 下まで読まないと分からなかった）。「海外向けサイト」は日本のお店の依頼には関係がないので書かない。
 # 「やり取りはこちらのメッセージで」は通話を断っているように読めるので、「ご連絡はメッセージで」だけにした。
+# 2026-10-20、「ほぼクラウドワークス断られる」（応募213件・返信0件）。1行目を「はじめまして、ソラと申します。{何を作るか}のご依頼、
+# {金額}・納期{日数}でお受けできます。」にした（job_subject）。募集文から1文を抜き出す「募集文の「…」という点も、しっかり形にします」は
+# 「詳細は採用者にのみお伝えします」のような文まで拾って機械っぽく見えたのでやめた（pick_wish_sentence は残してある）
 _DAYS = {
     "lp": "2〜3週間", "ec": "4〜6週間", "fix": "3〜5日", "coding": "1〜2週間", "visual": "5〜7日",
     "logo": "1〜2週間", "card": "5〜7日", "package": "1〜2週間", "flyer": "5〜7日", "banner": "3〜5日",
 }
 
-_HEAD = "はじめまして、Web制作のソラと申します。\n"
+_HEAD = "はじめまして、ソラと申します。{subject}のご依頼、"
 
 _BODY = """{look} ▶ {portfolio}
 
@@ -703,10 +766,10 @@ _BODY = """{look} ▶ {portfolio}
 ご連絡はメッセージで、24時間以内にお返事します。よろしくお願いいたします。
 ソラ"""
 
-PROPOSAL_TEMPLATE = _HEAD + "お見積り{amount:,}円（一式）、納期の目安は{days}です。\n" + _BODY
+PROPOSAL_TEMPLATE = _HEAD + "{amount:,}円（一式）・納期{days}でお受けできます。\n" + _BODY
 
 # 予算が「見積り希望」等で未提示の案件用（目安額を示し、正式な金額は要件確認後に出す）
-PROPOSAL_TEMPLATE_QUOTE = _HEAD + "お見積りは{amount_estimate:,}円前後、納期の目安は{days}です（内容を伺って確定します）。\n" + _BODY
+PROPOSAL_TEMPLATE_QUOTE = _HEAD + "{amount_estimate:,}円前後・納期{days}でお受けできます（内容を伺って確定します）。\n" + _BODY
 
 
 def _calc_margin(amount: int, percent: float, min_yen: int, max_yen: int) -> int:

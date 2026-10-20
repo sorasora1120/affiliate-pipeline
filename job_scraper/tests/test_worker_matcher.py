@@ -469,7 +469,43 @@ class DesignJobTest(unittest.TestCase):
         # 2026-10-16〜 日本の依頼には関係がないので「海外向け」とは書かず、最初の3行に金額・納期・実績を入れる
         self.assertNotIn("海外向け", proposal)
         self.assertIn("55,000円", "\n".join(proposal.splitlines()[:3]))
-        self.assertIn("納期の目安", proposal)
+        self.assertIn("納期", proposal.splitlines()[0])
+
+    def test_first_line_says_what_will_be_made(self):
+        """2026-10-20、1行目に題名から取り出した「何を作るか」と金額・納期を入れる。募集文から抜き出す1文は入れない。"""
+        from src.worker_matcher import proposal_and_worker_message
+        c = {"title": "【LPデザイン制作】パーソナルストレッチスタジオの集客LP制作パートナー募集", "url": "https://crowdworks.jp/public/jobs/1",
+             "description": "詳細は採用者にのみお伝えします。スマホでの見やすさを重視したいです。",
+             "amount": 40000, "fee": 8000, "margin": 8000, "quote": 24000}
+        proposal, _ = proposal_and_worker_message(c)
+        first = proposal.splitlines()[0]
+        self.assertEqual(first, "はじめまして、ソラと申します。パーソナルストレッチスタジオの集客LPのご依頼、40,000円（一式）・納期2〜3週間でお受けできます。")
+        self.assertNotIn("募集文の", proposal)
+        self.assertNotIn("Web制作のソラ", proposal)
+        c.update(title="HP作成依頼", amount=None, amount_estimate=50000)
+        first = proposal_and_worker_message(c)[0].splitlines()[0]
+        self.assertIn("ホームページのご依頼、50,000円前後・納期", first)
+
+    def test_job_subject(self):
+        from src.worker_matcher import job_subject
+        cases = {
+            "【食品LP制作経験者募集/継続依頼】熊本の老舗馬刺し専門店「花びら馬刺し」商品LPデザイナー募集": "熊本の老舗馬刺し専門店「花びら馬刺し」商品LP",
+            "文章作成 【ホームページ制作】家事代行サービスのWebサイト制作をお願いします": "家事代行サービスのWebサイト",
+            "「もっと友達と旅したい」を仕事の第一歩に☀️｜女子旅LP制作✈️｜継続あり": "女子旅LP",
+            "【日本語限定】アトリエのロゴデザイン依頼": "アトリエのロゴデザイン",
+            "消耗品（衛生用品）のパッケージデザイン｜袋2種・表裏｜ロゴ支給・印刷用実寸データ納品": "消耗品のパッケージデザイン",
+            "LPのコーディング｜HTML・CSSでの実装": "LPのコーディング",
+            "『社内の連絡をもっと楽に』を形にする｜サービス紹介バナー制作": "サービス紹介バナー",
+            "名刺に入れるロゴを作っていただきたいです": "名刺に入れるロゴ",
+            "「カタログ・パンフレット作成」のお仕事のご相談": "カタログ・パンフレット",
+            "【継続依頼】Illustratorで不動産会社サービス紹介チラシ（A4両面）の制作｜スピーディーに対応いただけるデザイナー様募集": "不動産会社サービス紹介チラシ",
+            "HP作成依頼": "ホームページ",
+            # 作る物が題名に無い時は種類ごとの言い方
+            "オンラインくじ販売時の商品画像とweb用画像制作": "ホームページ",
+            "【デザイン作成済・STUDIO】デザインを参考にサイトを構築・公開設定までしてくれる方を募集": "ホームページ",
+        }
+        for title, want in cases.items():
+            self.assertEqual(job_subject(title), want, title)
 
     def test_print_jobs_pass_and_illustration_does_not(self):
         # 2026-10-12夜、ユーザー「もっと仕事のはばふやして」で取扱説明書・封筒・年賀状・のぼりなどの印刷物も拾う。
