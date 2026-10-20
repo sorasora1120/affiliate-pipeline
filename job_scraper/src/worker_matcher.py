@@ -14,7 +14,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
-from .budget_utils import parse_budget_yen, quote_budget_yen, title_price_yen
+from .budget_utils import low_budget_yen, parse_budget_yen, quote_budget_yen, title_price_yen
 
 # カテゴリ（＝収集時の検索キーワード）が一致しても、ココナラの検索は緩く
 # 「アンケート回答者募集」「バイマ出品作業」のような無関係な案件も返してくる
@@ -185,12 +185,23 @@ _ESTIMATE_RULES: list[tuple[list[str], int]] = [
 _DESIGN_ESTIMATES = {"logo": 30000, "package": 40000, "flyer": 20000, "card": 10000, "banner": 10000}
 
 
-def estimate_amount(title: str, fallback_yen: int) -> int:
+# 作るのが Claude の時（最初の1件が決まるまで、config.FIRST_JOB_MODE）の目安額。相場の下の方（2026-10-20）
+_ESTIMATE_RULES_SELF: list[tuple[list[str], int]] = [
+    (["ec", "ネットショップ", "通販", "shopify"], 80000),
+    (["lp", "ランディング"], 30000),
+    (["studio", "ペライチ", "wix"], 30000),
+    (["コーポレート", "ホームページ", "hp", "wordpress", "ワードプレス", "サイト"], 50000),
+]
+_DESIGN_ESTIMATES_SELF = {"logo": 20000, "package": 30000, "flyer": 15000, "card": 10000, "banner": 10000}
+
+
+def estimate_amount(title: str, fallback_yen: int, self_build: bool = False) -> int:
     kind = job_type(title)
-    if kind in _DESIGN_ESTIMATES:
-        return max(_DESIGN_ESTIMATES[kind], fallback_yen)
+    design = _DESIGN_ESTIMATES_SELF if self_build else _DESIGN_ESTIMATES
+    if kind in design:
+        return max(design[kind], fallback_yen)
     t = _normalize(title)
-    for words, amount in _ESTIMATE_RULES:
+    for words, amount in (_ESTIMATE_RULES_SELF if self_build else _ESTIMATE_RULES):
         for w in words:
             if w.isascii():
                 if re.search(rf"(?<![a-z]){w}(?![a-z])", t):
@@ -714,7 +725,7 @@ def job_subject(title: str) -> str:
     return best or _SUBJECT_BY_TYPE.get(job_type(title), "ホームページ")
 
 
-def _tailored_parts(title: str, description: str = "") -> dict:
+def _tailored_parts(title: str, description: str = "", self_build: bool = False) -> dict:
     key = job_type(title)
     spec = _TYPE_TEXT[key]
     ideas = pick_ideas(key, description)
@@ -728,15 +739,25 @@ def _tailored_parts(title: str, description: str = "") -> dict:
         look, portfolio = "デザインのサンプル", DESIGN_SAMPLES_URL
     else:
         look, portfolio = "制作実績とサンプル", PORTFOLIO_BASE_URL
+    rough = _rough_line(title)
+    ai = ""
+    if self_build:
+        # 最初の1件は Claude が作る（2026-10-20）。Illustrator の AI 形式は作れないので書かない。
+        # ワーカーに頼まないので、デザインの仕事も契約前にラフを1案見せられる
+        ideas = [i.replace("（PDF・AI）", "（PDF）").replace("AI・PNG・SVGのデータ", "PNG・SVG・PDFのデータ") for i in ideas]
+        if key in DESIGN_TYPES:
+            rough = "ご契約前に、ラフを1案お見せできます。"
+        ai = "\n制作にはAIも活用しています。そのぶん早く、お手頃な金額でお受けできます。"
     return {
         "hook": _PITCH[key]["hook"],
         "ideas": "\n".join(f"・{i}" for i in ideas),
         "subject": job_subject(title),
+        "ai": ai,
         "look": look,
         "portfolio": portfolio,
-        "days": _DAYS.get(key, "3〜4週間"),
+        "days": (_DAYS_SELF.get(key, "2〜3週間") if self_build else _DAYS.get(key, "3〜4週間")),
         "question": spec["questions"][0],
-        "rough": _rough_line(title),
+        "rough": rough,
     }
 
 
@@ -753,6 +774,12 @@ _DAYS = {
     "logo": "1〜2週間", "card": "5〜7日", "package": "1〜2週間", "flyer": "5〜7日", "banner": "3〜5日",
 }
 
+# 作るのが Claude の時（最初の1件が決まるまで）の納期の目安。ワーカーの都合を待たないので短くできる（2026-10-20）
+_DAYS_SELF = {
+    "lp": "1〜2週間", "ec": "3〜4週間", "fix": "2〜3日", "coding": "5〜7日", "visual": "3〜5日",
+    "logo": "5〜7日", "card": "3〜5日", "package": "1〜2週間", "flyer": "3〜5日", "banner": "2〜3日",
+}
+
 _HEAD = "はじめまして、ソラと申します。{subject}のご依頼、"
 
 _BODY = """{look} ▶ {portfolio}
@@ -760,7 +787,7 @@ _BODY = """{look} ▶ {portfolio}
 ■ ご提案
 {hook}と考えています。今回は次の3つを意識します。
 {ideas}
-{rough}
+{rough}{ai}
 
 差し支えなければ、{question}を教えてください。
 ご連絡はメッセージで、24時間以内にお返事します。よろしくお願いいたします。
@@ -795,7 +822,7 @@ def platform_fee(platform: str, amount: int) -> int:
     return int(amount * 0.22)
 
 
-def budget_and_quote(budget_text: str, title: str, min_budget_yen: int) -> tuple[int | None, int | None]:
+def budget_and_quote(budget_text: str, title: str, min_budget_yen: int, low_end: bool = False) -> tuple[int | None, int | None]:
     """(応募するかを決める金額, 提案文で出す金額)。どちらも分からなければ (None, None)。
 
     予算欄の範囲は上限で応募を決め、提案は真ん中で出す（2026-10-08）。題名に「【予算5万円固定】」
@@ -806,8 +833,9 @@ def budget_and_quote(budget_text: str, title: str, min_budget_yen: int) -> tuple
     stated = title_price_yen(title)
     if upper is None:
         return stated, stated
-    # 真ん中が最低予算より低い時は最低予算（ただし上限まで）にする
-    quote = max(quote_budget_yen(budget_text) or upper, min(min_budget_yen, upper))
+    # 真ん中（low_end なら下限。最初の1件が決まるまで、2026-10-20）が最低予算より低い時は最低予算（ただし上限まで）にする
+    base = low_budget_yen(budget_text) if low_end else quote_budget_yen(budget_text)
+    quote = max(base or upper, min(min_budget_yen, upper))
     if stated is None:
         return upper, quote
     return min(upper, stated), min(quote, stated)
@@ -822,6 +850,22 @@ def split_amount(
     return fee, margin, amount - fee - margin
 
 
+def split_amount_self(platform: str, amount: int) -> tuple[int, int, int]:
+    """作るのが自分（Claude）の時の (手数料, 利益, ワーカー提示額)。ワーカー代は0で、手数料を引いた残りが全部利益（2026-10-20）。"""
+    fee = platform_fee(platform, amount)
+    return fee, amount - fee, 0
+
+
+# 「AI不可」の案件（最初の1件は Claude が作るので出さない）。「AI活用OK」「AIで作ったデザインを入稿データに」は当たらない
+_AI_FORBIDDEN_RE = re.compile(
+    r"(?:生成\s*)?ai(?:ツール|画像|生成|イラスト)?(?:の|で|を|は|による)?(?:使用|利用|作成|生成)?[^。\n]{0,8}"
+    r"(?:不可|禁止|(?<![a-z])ng(?![a-z])|お断り|使用しない|使わない|厳禁|ご遠慮)")  # 「PNG」の ng には当てない
+
+
+def forbids_ai(text: str) -> bool:
+    return bool(_AI_FORBIDDEN_RE.search(_normalize(text or "")))
+
+
 def find_candidates(
     rows: list[dict],
     target_categories: set[str],
@@ -830,6 +874,8 @@ def find_candidates(
     margin_percent: float,
     margin_min_yen: int,
     margin_max_yen: int,
+    *,
+    self_build: bool = False,
 ) -> tuple[list[dict], list[int], list[int]]:
     """(マッチング候補一覧, 予算未達で弾いた行番号一覧, 除外キーワードで弾いた行番号一覧) を返す。
 
@@ -872,7 +918,7 @@ def find_candidates(
         # 「30,000円 〜 50,000円」の範囲表記は上限を、「5千円未満」「10万円」の
         # ような位取り略記も金額として解釈する（budget_utils.parse_budget_yen、
         # 2026-08-11修正）。題名に金額が書いてあればそれを超えない（budget_and_quote、2026-10-09）
-        parsed_amount, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
+        parsed_amount, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen, low_end=self_build)
         base = {
             "row": idx,
             "platform": r.get("プラットフォーム"),
@@ -886,6 +932,8 @@ def find_candidates(
             "rating": r.get("評価") or "",
             "order_count": r.get("実績件数") or "",
             "description": r.get("募集文") or "",
+            "budget_text": r.get("予算", ""),
+            "self_build": self_build,
         }
 
         if parsed_amount is None:
@@ -899,9 +947,10 @@ def find_candidates(
             # amountはNoneのまま（＝クライアント予算は未確定）にして、見積り依頼
             # テンプレートを使う分岐はそのまま維持する。is_estimateで、この
             # margin/quoteが実際の予算に基づかない「目安」であることを示す。
-            est_amount = estimate_amount(title, min_budget_yen)
-            est_fee, est_margin, est_quote = split_amount(
-                base["platform"], est_amount, margin_percent, margin_min_yen, margin_max_yen
+            est_amount = estimate_amount(title, min_budget_yen, self_build)
+            est_fee, est_margin, est_quote = (
+                split_amount_self(base["platform"], est_amount) if self_build
+                else split_amount(base["platform"], est_amount, margin_percent, margin_min_yen, margin_max_yen)
             )
             candidates.append({
                 **base, "amount": None, "amount_estimate": est_amount, "fee": est_fee,
@@ -913,10 +962,13 @@ def find_candidates(
             below_budget_rows.append(idx)
             continue
         # 応募するかどうかは上限で決め、提案文で出す金額は範囲の真ん中にする（2026-10-08）
-        fee, margin, quote = split_amount(base["platform"], amount, margin_percent, margin_min_yen, margin_max_yen)
-        if quote <= 0:
-            below_budget_rows.append(idx)
-            continue
+        if self_build:
+            fee, margin, quote = split_amount_self(base["platform"], amount)
+        else:
+            fee, margin, quote = split_amount(base["platform"], amount, margin_percent, margin_min_yen, margin_max_yen)
+            if quote <= 0:
+                below_budget_rows.append(idx)
+                continue
         candidates.append({**base, "amount": amount, "fee": fee, "margin": margin, "quote": quote})
     return candidates, below_budget_rows, excluded_keyword_rows
 
@@ -928,6 +980,8 @@ def review_proposed_rows(
     margin_percent: float,
     margin_min_yen: int,
     margin_max_yen: int,
+    *,
+    self_build: bool = False,
 ) -> tuple[list[int], list[int], list[dict]]:
     """既に「提案済み」でまだ誰も手を付けていない（進捗ステージが空の）行を見直す。
 
@@ -948,7 +1002,7 @@ def review_proposed_rows(
             irrelevant_rows.append(idx)
             continue
         # 提案で出す金額は範囲の真ん中で、題名の金額は超えない（find_candidates と同じ考え方）
-        eligible, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen)
+        eligible, amount = budget_and_quote(r.get("予算", ""), title, min_budget_yen, low_end=self_build)
         if eligible is not None and eligible < min_budget_yen:
             # 最低予算を上げた時、まだ手を付けていない小さい案件を「送れる案件」から外す
             # （2026-10-09、「1万円以上じゃなきゃダメ」とのことで5,000円→1万円にした）
@@ -956,34 +1010,59 @@ def review_proposed_rows(
             continue
         if amount is not None:
             # 予算のある行も、提案文を最新のテンプレートで作り直す
-            fee, margin, quote = split_amount(
-                r.get("プラットフォーム", ""), amount, margin_percent, margin_min_yen, margin_max_yen
-            )
-            if quote > 0:
+            if self_build:
+                fee, margin, quote = split_amount_self(r.get("プラットフォーム", ""), amount)
+            else:
+                fee, margin, quote = split_amount(
+                    r.get("プラットフォーム", ""), amount, margin_percent, margin_min_yen, margin_max_yen
+                )
+            if quote > 0 or self_build:
                 refreshed.append({
                     "row": idx, "title": title, "url": r.get("URL"), "description": r.get("募集文") or "",
-                    "amount": amount, "fee": fee, "margin": margin, "quote": quote,
+                    "amount": amount, "fee": fee, "margin": margin, "quote": quote, "self_build": self_build,
                 })
             continue
-        est_amount = estimate_amount(title, min_budget_yen)
-        est_fee, est_margin, est_quote = split_amount(
-            r.get("プラットフォーム", ""), est_amount, margin_percent, margin_min_yen, margin_max_yen
+        est_amount = estimate_amount(title, min_budget_yen, self_build)
+        est_fee, est_margin, est_quote = (
+            split_amount_self(r.get("プラットフォーム", ""), est_amount) if self_build
+            else split_amount(r.get("プラットフォーム", ""), est_amount, margin_percent, margin_min_yen, margin_max_yen)
         )
         refreshed.append({
             "row": idx, "title": title, "url": r.get("URL"), "description": r.get("募集文") or "",
             "amount": None, "amount_estimate": est_amount, "fee": est_fee,
-            "margin": est_margin, "quote": est_quote,
+            "margin": est_margin, "quote": est_quote, "self_build": self_build,
         })
     return irrelevant_rows, below_budget_rows, refreshed
+
+
+_CMS_NAMES = (("WordPress", ("wordpress", "ワードプレス")), ("Shopify", ("shopify",)), ("STUDIO", ("studio",)),
+              ("Wix", ("wix",)), ("ペライチ", ("ペライチ",)))
+
+
+def _self_build_note(c: dict) -> str:
+    """作るのが Claude の時、ワーカー向けメッセージの欄に入れる自分用のメモ（ビューアは空の行を出さないので空にしない）。"""
+    t = _normalize(c.get("title", "") + " " + c.get("description", ""))
+    lines = ["作るのは Claude（最初の1件が決まるまで）。採用されたら、この案件のURLと、"
+             "お客さんから届いた内容（原稿・写真・ロゴ・ご希望）を Claude のチャットに送ってね。"]
+    cms = [name for name, words in _CMS_NAMES if any(w in t for w in words)]
+    if cms:
+        lines.append(f"※{'・'.join(cms)}の管理画面での作業は、Claude の手順を見ながら自分で操作するところがあります。")
+    lines.append(c.get("url") or "")
+    return "\n".join(lines)
 
 
 def proposal_and_worker_message(c: dict) -> tuple[str, str]:
     """(クライアント提案文, ワーカー向けメッセージ) のペアを返す。生のテキストなので
     Discordのコードブロック整形なしでスプレッドシートにもそのまま書き込める。"""
+    self_build = bool(c.get("self_build"))
+    parts = _tailored_parts(c["title"], c.get("description", ""), self_build)
+    if self_build:
+        amount = c["amount_estimate"] if c["amount"] is None else c["amount"]
+        template = PROPOSAL_TEMPLATE_QUOTE if c["amount"] is None else PROPOSAL_TEMPLATE
+        return template.format(title=c["title"], amount=amount, amount_estimate=amount, **parts), _self_build_note(c)
     if c["amount"] is None:
         proposal = PROPOSAL_TEMPLATE_QUOTE.format(
-            title=c["title"], amount_estimate=c["amount_estimate"],
-            **_tailored_parts(c["title"], c.get("description", ""))
+            title=c["title"], amount_estimate=c["amount_estimate"], **parts
         )
         worker_msg = (
             f'Hi! New project: {c["title"]}. '
@@ -993,9 +1072,7 @@ def proposal_and_worker_message(c: dict) -> tuple[str, str]:
             f'{c["url"]}'
         )
     else:
-        proposal = PROPOSAL_TEMPLATE.format(
-            title=c["title"], amount=c["amount"], **_tailored_parts(c["title"], c.get("description", ""))
-        )
+        proposal = PROPOSAL_TEMPLATE.format(title=c["title"], amount=c["amount"], **parts)
         worker_msg = (
             f'Hi! New project: {c["title"]}. Budget is around ¥{c["quote"]:,}. Interested?\n'
             f'{c["url"]}'
@@ -1025,6 +1102,15 @@ def format_info_message(c: dict) -> str:
             f"💰 クライアント予算 {c['amount']:,}円 / 手数料 {c['fee']:,}円 /"
             f" ワーカー提示額 {c['quote']:,}円 / あなたの利益 {c['margin']:,}円"
         )
+    if c.get("self_build"):
+        amount = c["amount_estimate"] if c["amount"] is None else c["amount"]
+        text = c.get("budget_text", "")
+        how = ("（目安）" if c["amount"] is None
+               else "（予算の一番下）" if low_budget_yen(text) != parse_budget_yen(text) else "（予算どおり）")
+        budget_line = (
+            f"💰 見積り {amount:,}円{how} / 手数料 {c['fee']:,}円 /"
+            f" 作るのは Claude / あなたの利益 {c['margin']:,}円"
+        )
 
     return (
         f"■ {c['title']}\n"
@@ -1038,6 +1124,8 @@ def format_info_message(c: dict) -> str:
 def format_worker_message(c: dict) -> str:
     """ワーカーへ送るコピペ用メッセージ（2通目）。"""
     _, worker_msg = proposal_and_worker_message(c)
+    if c.get("self_build"):
+        return f"--- 採用されたら ---\n{worker_msg}"
     return f"--- ワーカーへ（コピペ用） ---\n```\n{worker_msg}\n```"
 
 

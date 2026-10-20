@@ -21,7 +21,7 @@ from src import sheet_lock
 from src.expiry_checker import CLOSED_STATUS, COMPETITION_STATUS, find_closed_rows
 from src.notifier import notify_discord, notify_error
 from src.sheets_writer import SheetsWriter
-from src.worker_matcher import red_flag
+from src.worker_matcher import forbids_ai, red_flag
 from src.worker_matcher import (
     BELOW_BUDGET_STATUS,
     EXCLUDED_KEYWORD_STATUS,
@@ -78,6 +78,7 @@ def _run_locked() -> None:
         margin_percent=config.WORKER_MATCH_MARGIN_PERCENT,
         margin_min_yen=config.WORKER_MATCH_MARGIN_MIN_YEN,
         margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
+        self_build=config.FIRST_JOB_MODE,
     )
     logger.info("マッチング候補: %d件", len(candidates))
 
@@ -116,6 +117,16 @@ def _run_locked() -> None:
                 logger.info("要注意の案件を外しました row=%s（%s）", row, why)
             flagged_set = {row for row, _ in flagged}
             candidates = [c for c in candidates if c["row"] not in flagged_set]
+        if config.FIRST_JOB_MODE:
+            # 最初の1件は Claude が作るので、「AI不可」の案件は出さない（2026-10-20）
+            no_ai = {c["row"] for c in candidates if forbids_ai(c["title"] + "\n" + c.get("description", ""))}
+            if no_ai:
+                sheet.worksheet.batch_update(
+                    [{"range": f"A{row}", "values": [[AI_FORBIDDEN_STATUS]]} for row in sorted(no_ai)],
+                    value_input_option="RAW",
+                )
+                logger.info("AI不可の案件を%d件外しました", len(no_ai))
+                candidates = [c for c in candidates if c["row"] not in no_ai]
         competition = {c["row"] for c in candidates if page_info.get(c["row"], {}).get("competition")}
         if competition:
             # 先に作品を出すコンペ形式は受けられないので外す（2026-10-12）
@@ -202,6 +213,8 @@ def _run_locked() -> None:
 
 # 募集文に危ないサイン（成果報酬・外部でのやり取り・怪しい勧誘）があった案件のステータス
 RED_FLAG_STATUS = "対象外（要注意）"
+# 「AI不可」の案件（最初の1件が決まるまで Claude が作るので出さない。config.FIRST_JOB_MODE、2026-10-20）
+AI_FORBIDDEN_STATUS = "対象外（AI不可）"
 
 
 # 応募者がこの人数以下の新着は「今すぐ応募」として別に知らせる（2026-10-08）。
@@ -240,9 +253,15 @@ def _review_existing_proposals(sheet: SheetsWriter, rows: list[dict]) -> None:
         margin_percent=config.WORKER_MATCH_MARGIN_PERCENT,
         margin_min_yen=config.WORKER_MATCH_MARGIN_MIN_YEN,
         margin_max_yen=config.WORKER_MATCH_MARGIN_MAX_YEN,
+        self_build=config.FIRST_JOB_MODE,
     )
+    no_ai_rows: list[int] = []
+    if config.FIRST_JOB_MODE:
+        no_ai_rows = [c["row"] for c in refreshed if forbids_ai(c["title"] + "\n" + c.get("description", ""))]
+        refreshed = [c for c in refreshed if c["row"] not in set(no_ai_rows)]
     for target_rows, status, what in ((irrelevant_rows, EXCLUDED_KEYWORD_STATUS, "無関係な"),
-                                      (below_budget_rows, BELOW_BUDGET_STATUS, "最低予算に届かない")):
+                                      (below_budget_rows, BELOW_BUDGET_STATUS, "最低予算に届かない"),
+                                      (no_ai_rows, AI_FORBIDDEN_STATUS, "AI不可の")):
         if not target_rows:
             continue
         try:

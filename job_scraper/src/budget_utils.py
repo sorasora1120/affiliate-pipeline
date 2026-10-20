@@ -88,3 +88,18 @@ def quote_budget_yen(text: str) -> int | None:
         return max(low, (low + high) // 2 // 1000 * 1000)
     return None
 
+
+
+def low_budget_yen(text: str) -> int | None:
+    """範囲表記（「30,000円 〜 50,000円」）の下限。範囲でなければ parse_budget_yen と同じ。
+
+    2026-10-20、応募213件・返信0件。ユーザー「それで行こう」で、最初の1件が決まるまで見積りを予算の一番下にする
+    （作るのは Claude でワーカー代がかからないので、下限でも手数料を引いた残りが利益になる）。
+    """
+    if not text:
+        return None
+    for regex, unit in ((_PLAIN_RE, 1), (_MAN_RE, 10000), (_SEN_RE, 1000)):
+        found = [int(x.replace(",", "")) * unit for x in regex.findall(text)]
+        if found:
+            return min(found)
+    return None

@@ -551,3 +551,64 @@ class DesignJobTest(unittest.TestCase):
         self.assertEqual([c["row"] for c in cands], [2, 4])
         self.assertEqual(excluded, [3])
         self.assertEqual(cands[1]["amount_estimate"], 30000)  # ロゴの目安
+
+
+class FirstJobModeTest(unittest.TestCase):
+    """2026-10-20、ユーザー「それで行こう」：最初の1件が決まるまで、見積りは予算の一番下・作るのは Claude（ワーカー代0）。"""
+
+    def test_low_budget(self):
+        from src.budget_utils import low_budget_yen
+        self.assertEqual(low_budget_yen("30,000円 〜 50,000円"), 30000)
+        self.assertEqual(low_budget_yen("55,000円"), 55000)
+        self.assertEqual(low_budget_yen("〜 5,000円"), 5000)
+        self.assertEqual(low_budget_yen("5万円 〜 10万円"), 50000)
+        self.assertIsNone(low_budget_yen("見積り希望"))
+
+    def test_quote_is_the_bottom_of_the_range_but_not_below_the_minimum(self):
+        from src.worker_matcher import budget_and_quote
+        self.assertEqual(budget_and_quote("30,000円 〜 50,000円", "LP制作", 10000, low_end=True), (50000, 30000))
+        self.assertEqual(budget_and_quote("30,000円 〜 50,000円", "LP制作", 10000), (50000, 40000))
+        self.assertEqual(budget_and_quote("5,000円 〜 10,000円", "バナー制作", 10000, low_end=True), (10000, 10000))
+        self.assertEqual(budget_and_quote("10,000円 〜 30,000円", "【予算2万円】チラシ制作", 10000, low_end=True), (20000, 10000))
+
+    def test_self_build_keeps_everything_after_the_fee(self):
+        from src.worker_matcher import split_amount_self
+        self.assertEqual(split_amount_self("CrowdWorks", 30000), (6000, 24000, 0))
+        rows = [_row(タイトル="美容サロンのLP制作", 予算="30,000円 〜 50,000円", プラットフォーム="CrowdWorks"),
+                _row(タイトル="会社のホームページ制作", 予算="見積り希望", プラットフォーム="CrowdWorks")]
+        cands, below, _ = find_candidates(rows, CATEGORIES, EXCLUDE, 10000, 20, 3000, 30000, self_build=True)
+        self.assertEqual(below, [])
+        self.assertEqual((cands[0]["amount"], cands[0]["fee"], cands[0]["margin"], cands[0]["quote"]), (30000, 6000, 24000, 0))
+        self.assertTrue(cands[0]["self_build"])
+        self.assertEqual((cands[1]["amount_estimate"], cands[1]["quote"]), (50000, 0))
+
+    def test_self_build_proposal_says_ai_and_the_note_is_for_me(self):
+        from src.worker_matcher import proposal_and_worker_message
+        c = {"title": "美容サロンのLP制作（WordPress）", "url": "https://crowdworks.jp/public/jobs/1", "description": "",
+             "amount": 30000, "fee": 6000, "margin": 24000, "quote": 0, "self_build": True}
+        proposal, note = proposal_and_worker_message(c)
+        self.assertIn("美容サロンのLPのご依頼、30,000円（一式）・納期1〜2週間でお受けできます。", proposal.splitlines()[0])
+        self.assertIn("制作にはAIも活用しています", proposal)
+        self.assertTrue(note.startswith("作るのは Claude"))
+        self.assertIn("WordPressの管理画面", note)
+        self.assertIn("https://crowdworks.jp/public/jobs/1", note)
+        # デザインの仕事：Illustrator の AI 形式は書かず、契約前にラフを見せる
+        c.update(title="新規オープン店舗の販促チラシ作成", amount=15000)
+        proposal, note = proposal_and_worker_message(c)
+        self.assertIn("入稿データ（PDF）", proposal)
+        self.assertNotIn("PDF・AI", proposal)
+        self.assertIn("ラフを1案", proposal)
+        self.assertNotIn("管理画面", note)
+        # ワーカーに頼むとき（今まで通り）は AI の一文を入れない
+        c.update(self_build=False, quote=6000)
+        proposal, note = proposal_and_worker_message(c)
+        self.assertNotIn("AIも活用", proposal)
+        self.assertTrue(note.startswith("Hi!"))
+
+    def test_forbids_ai(self):
+        from src.worker_matcher import forbids_ai
+        for t in ["AI生成の画像は不可です", "※AI使用不可", "生成AIの利用は禁止します", "AIツールでの作成はNGです", "AIは使わないでください"]:
+            self.assertTrue(forbids_ai(t), t)
+        for t in ["AI活用OK。LPのデザイン作成依頼", "【お茶のパッケージ】AIで作成したデザインを入稿データ化", "AI・PNG・SVGで納品",
+                  "AIを使っても構いません", ""]:
+            self.assertFalse(forbids_ai(t), t)
