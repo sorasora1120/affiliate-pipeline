@@ -14,8 +14,12 @@
  *      をコピーしてClaudeに渡す → docs/index.htmlのAPPS_SCRIPT_URLに設定してもらう
  *
  * シート名・列名を変更した場合はこのファイルも合わせて直すこと。
+ *
+ * 直したあと（同じURLのまま新しい版にする）: 「デプロイ」→「デプロイを管理」→ 鉛筆 → バージョン「新バージョン」→「デプロイ」
  */
 function doGet(e) {
+  // 2026-11-02〜 お店マップ（dispatch-viewer/shops.html）の印（📨送った・💬返事あり など）を「お店マップ」タブの K列（状態）・L列（更新日時）に書く
+  if (e.parameter.shop) return saveShopMark(e.parameter);
   var url = e.parameter.url;
   var stage = e.parameter.stage;
   if (!url || !stage) {
@@ -44,6 +48,28 @@ function doGet(e) {
     }
     return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "該当URLが見つかりません" }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveShopMark(p) {
+  var out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
+  var name = p.shop, lat = parseFloat(p.lat), lon = parseFloat(p.lon), state = p.state || "";
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("お店マップ");
+    if (!sheet) return out({ ok: false, error: "お店マップのタブがありません" });
+    var data = sheet.getRange(1, 1, sheet.getLastRow(), 7).getValues();   // A 名前 … F 緯度 G 経度
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === name && Math.abs(parseFloat(data[i][5]) - lat) < 0.0002 && Math.abs(parseFloat(data[i][6]) - lon) < 0.0002) {
+        var now = Utilities.formatDate(new Date(), "America/Toronto", "yyyy-MM-dd HH:mm");
+        sheet.getRange(i + 1, 11, 1, 2).setValues([[state, state ? now : ""]]);   // K 状態・L 更新日時
+        return out({ ok: true, row: i + 1 });
+      }
+    }
+    return out({ ok: false, error: "お店が見つかりません" });
   } finally {
     lock.releaseLock();
   }
